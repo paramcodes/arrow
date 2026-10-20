@@ -1,0 +1,33 @@
+/**
+ * The base styles of the Arrow window.
+ *
+ * Every color comes from a token in `@arrow/theme`, so the window follows the
+ * dark-first palette without a hardcoded value in this file.
+ */
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--canvas);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  overflow: hidden;
+}
+
+.app-root {
+  display: grid;
+  place-items: center;
+  height: 100%;
+}
+
+.app-title {
+  color: var(--ink-secondary);
+  font-size: 1.5rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+}

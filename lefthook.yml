@@ -1,0 +1,16 @@
+# The local gate. Every commit runs the same checks CI runs, on the staged
+# files, so a broken change never reaches the branch.
+
+pre-commit:
+  parallel: true
+  commands:
+    branch:
+      run: bash scripts/guard-branch.sh
+    format-check:
+      glob: "**/*.{ts,tsx,js,mjs,cjs,json,css}"
+      run: pnpm exec biome format {staged_files}
+    lint:
+      glob: "**/*.{ts,tsx}"
+      run: pnpm exec eslint --max-warnings=0 {staged_files}
+    typecheck:
+      run: pnpm typecheck

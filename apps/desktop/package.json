@@ -1,0 +1,31 @@
+{
+  "name": "@arrow/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "The Arrow desktop shell: a Tauri v2 window that renders the React app.",
+  "scripts": {
+    "dev": "tauri dev",
+    "dev:web": "vite",
+    "build": "vite build",
+    "build:web": "vite build",
+    "preview": "vite preview",
+    "tauri": "tauri"
+  },
+  "dependencies": {
+    "@arrow/editor-core": "workspace:*",
+    "@arrow/theme": "workspace:*",
+    "@arrow/types": "workspace:*",
+    "@arrow/ui": "workspace:*",
+    "@tauri-apps/api": "2.12.4",
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "2.12.3",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "6.1.2",
+    "vite": "8.3.4"
+  }
+}

@@ -1,0 +1,25 @@
+/**
+ * The shared UI primitives of Arrow.
+ *
+ * Every rule reads a token from `@arrow/theme`, so the primitives follow the
+ * dark-first palette without a hardcoded color anywhere in this package.
+ */
+
+.ui-surface {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  color: var(--ink);
+  font-family: var(--font-sans);
+}
+
+.ui-surface--quiet {
+  background: var(--canvas-soft);
+  border-color: var(--border-strong);
+  color: var(--ink-secondary);
+}
+
+.ui-surface:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}

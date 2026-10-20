@@ -1,0 +1,237 @@
+{
+  "packageManager": "pnpm",
+  "commands": {
+    "exec": "pnpm exec"
+  },
+  "minimumCriteria": 10,
+  "minimumProofs": 9,
+  "agents": {
+    "file": "AGENTS.md",
+    "entryPoint": "CLAUDE.md",
+    "maxLines": 100
+  },
+  "layers": {
+    "data": {
+      "alias": "@tauri-apps/api",
+      "dir": "apps/desktop/src-tauri"
+    },
+    "restricted": [
+      {
+        "name": "workspace-packages",
+        "files": ["packages/*/src/**/*.{ts,tsx}"],
+        "forbidPackages": ["@tauri-apps/api", "@arrow/desktop"],
+        "forbidRoots": ["apps/desktop"]
+      }
+    ]
+  },
+  "criteria": [
+    {
+      "id": "boundaries",
+      "why": "the layers that must not reach across a boundary cannot",
+      "check": { "type": "command", "run": "${PM} arch" }
+    },
+    {
+      "id": "theme-discipline",
+      "why": "every color in the product comes from a token in packages/theme",
+      "check": {
+        "type": "command",
+        "run": "node scripts/check-theme-discipline.mjs",
+        "contains": "no-hardcoded-colors"
+      }
+    },
+    {
+      "id": "proofs",
+      "why": "every guardrail catches the mistake it was made for",
+      "check": { "type": "command", "run": "${PM} prove" }
+    },
+    {
+      "id": "escape-hatches",
+      "why": "inline lint config, ts-expect-error and skipped tests are errors in the source tree",
+      "check": {
+        "type": "fileContains",
+        "path": "eslint.config.mjs",
+        "contains": ["noInlineConfig", "ban-ts-comment", "no-skipped-tests"]
+      }
+    },
+    {
+      "id": "entry-point",
+      "why": "every rule in AGENTS.md names an enforcement path, and that path exists",
+      "check": { "type": "agentsFile" }
+    },
+    {
+      "id": "local-gate",
+      "why": "a broken change fails before it reaches the branch",
+      "check": {
+        "type": "fileContains",
+        "path": "lefthook.yml",
+        "contains": ["pre-commit:", "lint:", "typecheck:", "staged_files"]
+      }
+    },
+    {
+      "id": "ci",
+      "why": "the merge gate runs the canonical commands and scores the harness",
+      "check": {
+        "type": "fileContains",
+        "path": ".github/workflows/ci.yml",
+        "contains": ["harness"]
+      }
+    },
+    {
+      "id": "ratchet",
+      "why": "the procedure that turns a mistake into a permanent check is written down",
+      "check": {
+        "type": "fileContains",
+        "path": "docs/ratchet.md",
+        "contains": ["strongest layer", "proof case", "log row"]
+      }
+    },
+    {
+      "id": "mistake-log",
+      "why": "mistakes are recorded in a shape a reader can scan",
+      "check": {
+        "type": "fileContains",
+        "path": "docs/mistake-log.md",
+        "contains": ["Mistake", "Guardrail"]
+      }
+    },
+    {
+      "id": "verify",
+      "why": "the repository is green on the commands a contributor runs",
+      "check": { "type": "command", "run": "${PM} verify" }
+    }
+  ],
+  "proofs": [
+    {
+      "name": "a workspace package imports the Tauri API",
+      "write": [
+        {
+          "path": "packages/ui/src/__harness_probe.ts",
+          "content": "import { invoke } from \"@tauri-apps/api/core\";\n\nexport const probe = invoke;\n"
+        }
+      ],
+      "expect": {
+        "run": "${PM_EXEC} eslint --config eslint.arch.mjs ${PROBE} --max-warnings=0",
+        "exit": "nonzero",
+        "contains": "no-restricted-imports"
+      }
+    },
+    {
+      "name": "a workspace package imports the desktop app",
+      "write": [
+        {
+          "path": "packages/editor-core/src/__harness_probe.ts",
+          "content": "import { App } from \"../../../apps/desktop/src/App\";\n\nexport const probe = App;\n"
+        }
+      ],
+      "expect": {
+        "run": "${PM_EXEC} eslint --config eslint.arch.mjs ${PROBE} --max-warnings=0",
+        "exit": "nonzero",
+        "contains": "no-cross-layer-import"
+      }
+    },
+    {
+      "name": "a workspace package imports the desktop app by its package name",
+      "write": [
+        {
+          "path": "packages/editor-core/src/__harness_probe.ts",
+          "content": "import { App } from \"@arrow/desktop\";\n\nexport const probe = App;\n"
+        }
+      ],
+      "expect": {
+        "run": "${PM_EXEC} eslint --config eslint.arch.mjs ${PROBE} --max-warnings=0",
+        "exit": "nonzero",
+        "contains": "no-restricted-imports"
+      }
+    },
+    {
+      "name": "the source tree carries an inline lint config",
+      "write": [
+        {
+          "path": "apps/desktop/src/__harness_probe.ts",
+          "content": "export function harnessProbe() {\n  // eslint-disable-next-line no-console\n  console.log(\"this must not reach production\");\n}\n"
+        }
+      ],
+      "expect": {
+        "run": "${PM_EXEC} eslint ${PROBE} --max-warnings=0",
+        "exit": "nonzero",
+        "contains": "no-inline-config"
+      }
+    },
+    {
+      "name": "the source tree carries a ts-expect-error",
+      "write": [
+        {
+          "path": "apps/desktop/src/__harness_probe.ts",
+          "content": "export function harnessProbe(value: { count: number }): number {\n  // @ts-expect-error the property does not exist\n  return value.missing;\n}\n"
+        }
+      ],
+      "expect": {
+        "run": "${PM_EXEC} eslint ${PROBE} --max-warnings=0",
+        "exit": "nonzero",
+        "contains": "ban-ts-comment"
+      }
+    },
+    {
+      "name": "the source tree carries a skipped test",
+      "write": [
+        {
+          "path": "apps/desktop/src/__harness_probe.test.ts",
+          "content": "import { describe, expect, it } from \"vitest\";\n\ndescribe(\"harness probe\", () => {\n  it.skip(\"never runs\", () => {\n    expect(true).toBe(true);\n  });\n});\n"
+        }
+      ],
+      "expect": {
+        "run": "${PM_EXEC} eslint ${PROBE} --max-warnings=0",
+        "exit": "nonzero",
+        "contains": "no-skipped-tests"
+      }
+    },
+    {
+      "name": "the source tree parses raw JSON",
+      "write": [
+        {
+          "path": "apps/desktop/src/__harness_probe.ts",
+          "content": "export function harnessProbe(raw: string) {\n  return JSON.parse(raw);\n}\n"
+        }
+      ],
+      "expect": {
+        "run": "${PM_EXEC} eslint ${PROBE} --max-warnings=0",
+        "exit": "nonzero",
+        "contains": "no-raw-json-parse"
+      }
+    },
+    {
+      "name": "a component hardcodes a color",
+      "write": [
+        {
+          "path": "apps/desktop/src/__harness_probe.ts",
+          "content": "export const probeColor = \"#ff8800\";\n"
+        }
+      ],
+      "expect": {
+        "run": "node scripts/check-theme-discipline.mjs",
+        "exit": "nonzero",
+        "contains": "hardcoded color"
+      }
+    },
+    {
+      "name": "the workspace ui alias resolves to its entry point",
+      "write": [
+        {
+          "path": "apps/desktop/src/__harness_probe.test.ts",
+          "content": "import { describe, expect, it } from \"vitest\";\n\nimport { cn } from \"@arrow/ui\";\n\ndescribe(\"the workspace alias probe\", () => {\n  it(\"resolves the ui package\", () => {\n    expect(cn(\"a\", \"b\")).toBe(\"a b\");\n  });\n});\n"
+        }
+      ],
+      "expect": {
+        "run": "${PM_EXEC} vitest run apps/desktop/src/__harness_probe.test.ts",
+        "exit": "zero"
+      }
+    }
+  ],
+  "notes": [
+    "The data-access criterion of the default harness was replaced. Arrow has no server-side data layer and no rows to own, so the criterion became the theme discipline: every color comes from a token in packages/theme.",
+    "The layer list is the Arrow layer list. The workspace packages under packages/ may not import the Tauri API and may not import the desktop app; the desktop app owns every Tauri call.",
+    "Raise minimumCriteria when a criterion is added. Never lower it to make the score pass.",
+    "minimumProofs is the floor on the proof set, and it lives here so the scorer and the prover cannot disagree about it. Raise it when a proof case is added. Never lower it to make the score pass, and never empty the proof set: a proof run that proves nothing fails.",
+    "The scorer counts the coverage check separately from the criteria, so a score of 10/10 means ten criteria passed."
+  ]
+}

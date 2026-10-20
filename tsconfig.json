@@ -1,0 +1,10 @@
+{
+  "files": [],
+  "references": [
+    { "path": "./packages/types" },
+    { "path": "./packages/theme" },
+    { "path": "./packages/editor-core" },
+    { "path": "./packages/ui" },
+    { "path": "./apps/desktop" }
+  ]
+}
