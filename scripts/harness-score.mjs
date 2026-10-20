@@ -269,8 +269,8 @@ function requirementHolds(text, requirement) {
 
 function describeRequirement(requirement) {
   const parts = [];
-  if (requirement.contains) parts.push(`holds ${requirement.contains.join(", ")}`);
-  if (requirement.notContains) parts.push(`holds none of ${requirement.notContains.join(", ")}`);
+  if (requirement.contains) parts.push(`hold ${requirement.contains.join(", ")}`);
+  if (requirement.notContains) parts.push(`hold none of ${requirement.notContains.join(", ")}`);
   return parts.join(" and ");
 }
 
