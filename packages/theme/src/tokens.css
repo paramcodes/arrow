@@ -5,6 +5,15 @@
  * tier arrives in a later phase. Every color in the product comes from a
  * variable defined here, so CodeMirror, xterm.js and the React tree read the
  * same source of truth.
+ *
+ * This file is the only place in the repository where a color literal may
+ * live. `scripts/check-theme-discipline.mjs` fails the build when one appears
+ * anywhere else.
+ *
+ * The font and radius tokens carry two names on purpose. The `*-family-*` and
+ * `*-size-*` names hold the literal, and the short names alias them, so the
+ * Tailwind theme namespace (`--font-sans`, `--radius-md`) never collides with
+ * the runtime variable of the same name.
  */
 
 :root {
@@ -29,15 +38,28 @@
   --accent-hover: oklch(0.6 0.25 30);
   --accent-soft: oklch(0.25 0.08 30);
 
+  /* Semantic */
+  --success: oklch(0.65 0.18 145);
+  --warning: oklch(0.75 0.15 80);
+  --error: oklch(0.6 0.2 15);
+  --info: oklch(0.65 0.15 250);
+
   /* Focus */
   --focus-ring: oklch(0.65 0.25 30 / 0.6);
 
   /* Typography */
-  --font-sans: "Inter", system-ui, sans-serif;
-  --font-mono: "JetBrains Mono", "Berkeley Mono", ui-monospace, monospace;
+  --font-family-sans: "Inter", system-ui, sans-serif;
+  --font-family-mono: "JetBrains Mono", ui-monospace, monospace;
+  --font-family-display: "Inter", system-ui, sans-serif;
+  --font-sans: var(--font-family-sans);
+  --font-mono: var(--font-family-mono);
+  --font-display: var(--font-family-display);
 
   /* Shape */
-  --radius-sm: 4px;
-  --radius-md: 6px;
-  --radius-lg: 8px;
+  --radius-size-sm: 4px;
+  --radius-size-md: 6px;
+  --radius-size-lg: 8px;
+  --radius-sm: var(--radius-size-sm);
+  --radius-md: var(--radius-size-md);
+  --radius-lg: var(--radius-size-lg);
 }
