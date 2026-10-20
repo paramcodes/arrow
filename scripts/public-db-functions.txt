@@ -1,0 +1,2 @@
+# Functions in the data layer that read rows nobody owns, so they take no actor id.
+# Format: <function name> — <reason>
