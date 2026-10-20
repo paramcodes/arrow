@@ -10,3 +10,14 @@ dist/
 target/
 *.tsbuildinfo
 .DS_Store
+
+# TypeScript build output of the desktop app.
+.tsbuild/
+
+# Test and report output.
+coverage/
+playwright-report/
+test-results/
+
+# Playwright and Vite caches.
+.vite/
