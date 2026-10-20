@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
-import { colorTokens, colors, tokenNames, tokenVariable } from "./index";
+import { colorTokens, colors, focusTokens, tokenNames, tokenVariable } from "./index";
 import { arrowPreset } from "./tailwind.preset";
 
 function read(name: string): string {
@@ -12,6 +12,52 @@ function read(name: string): string {
 const tokensCss = read("tokens.css");
 const themeCss = read("theme.css");
 const fontsCss = read("fonts.css");
+const designMd = read("../../../DESIGN.md");
+
+/**
+ * A color value, split into the color space it names and the numbers it
+ * carries. The spelling of a number is not part of a color, so the test
+ * compares the numbers and not the text.
+ */
+function parseColor(value: string): { space: string; numbers: number[] } {
+  const match = value.trim().match(/^([a-z-]+)\(([^)]*)\)$/);
+  if (!match) throw new Error(`not a color function: ${value}`);
+  const numbers = [...(match[2] ?? "").matchAll(/\d+(?:\.\d+)?/g)].map((found) => Number(found[0]));
+  return { space: match[1] ?? "", numbers };
+}
+
+/**
+ * Asserts that two color values are the same color.
+ */
+function expectSameColor(actual: string, expected: string) {
+  const left = parseColor(actual);
+  const right = parseColor(expected);
+  expect(left.space).toBe(right.space);
+  expect(left.numbers.length).toBe(right.numbers.length);
+  left.numbers.forEach((number, index) => {
+    expect(number).toBeCloseTo(right.numbers[index] ?? Number.NaN, 10);
+  });
+}
+
+/**
+ * The value a token holds in the stylesheet.
+ */
+function stylesheetValue(name: string): string {
+  const match = tokensCss.match(new RegExp(`--${name}:\\s*([^;]+);`));
+  if (!match) throw new Error(`tokens.css does not define --${name}`);
+  return match[1] ?? "";
+}
+
+/**
+ * The value a token holds in the design document.
+ */
+function documentedValue(name: string): string {
+  const line = designMd.split("\n").find((candidate) => candidate.includes(`\`--${name}\``));
+  if (!line) throw new Error(`DESIGN.md does not document --${name}`);
+  const match = line.match(/oklch\([^)]*\)/);
+  if (!match) throw new Error(`DESIGN.md gives no value for --${name}`);
+  return match[0];
+}
 
 describe("the design tokens", () => {
   it("names every token once", () => {
@@ -24,7 +70,13 @@ describe("the design tokens", () => {
 
   it("holds the same color in the stylesheet and in the constants", () => {
     for (const [name, value] of Object.entries(colors)) {
-      expect(tokensCss).toContain(`--${name}: ${value};`);
+      expectSameColor(stylesheetValue(name), value);
+    }
+  });
+
+  it("documents the same color as the stylesheet", () => {
+    for (const name of [...colorTokens, ...focusTokens]) {
+      expectSameColor(documentedValue(name), stylesheetValue(name));
     }
   });
 

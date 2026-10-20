@@ -33,10 +33,10 @@ value, a color function or a named color.
 | `--canvas`       | `oklch(0.15 0.005 250)` | The window floor, the editor background         |
 | `--canvas-soft`  | `oklch(0.18 0.005 250)` | Panels, the sidebar, the status bar             |
 | `--canvas-strong`| `oklch(0.12 0.005 250)` | The activity bar, recessed wells               |
-| `--surface`      | `oklch(0.20 0.008 250)` | Cards, dropdowns, the command palette          |
+| `--surface`      | `oklch(0.2 0.008 250)` | Cards, dropdowns, the command palette          |
 | `--surface-hover`| `oklch(0.23 0.008 250)` | A hovered row or a hovered surface             |
 | `--border`       | `oklch(0.25 0.005 250)` | Hairline dividers, panel edges                 |
-| `--border-strong`| `oklch(0.30 0.005 250)` | A focused edge, a scrollbar thumb              |
+| `--border-strong`| `oklch(0.3 0.005 250)` | A focused edge, a scrollbar thumb              |
 
 Surfaces are close in lightness on purpose. The product separates regions with a hairline and a
 small step in lightness, never with a shadow.
@@ -46,7 +46,7 @@ small step in lightness, never with a shadow.
 | Token               | Value                    | Use                              |
 | ------------------- | ------------------------ | -------------------------------- |
 | `--ink`             | `oklch(0.93 0.005 90)`   | Primary text, code               |
-| `--ink-secondary`   | `oklch(0.60 0.005 90)`   | Labels, muted text               |
+| `--ink-secondary`   | `oklch(0.6 0.005 90)`   | Labels, muted text               |
 | `--ink-tertiary`    | `oklch(0.45 0.005 90)`   | Disabled text, placeholders      |
 
 ### Accent
@@ -54,7 +54,7 @@ small step in lightness, never with a shadow.
 | Token            | Value                  | Use                                        |
 | ---------------- | ---------------------- | ------------------------------------------ |
 | `--accent`       | `oklch(0.65 0.25 30)` | The cursor accent, the primary action       |
-| `--accent-hover` | `oklch(0.60 0.25 30)` | The pressed state of the accent             |
+| `--accent-hover` | `oklch(0.6 0.25 30)` | The pressed state of the accent             |
 | `--accent-soft`  | `oklch(0.25 0.08 30)` | A quiet accent background, text selection  |
 
 One accent color, used sparingly. A screen that shows orange everywhere shows nothing.
@@ -65,7 +65,7 @@ One accent color, used sparingly. A screen that shows orange everywhere shows no
 | ----------- | ---------------------- | ------------------------------ |
 | `--success` | `oklch(0.65 0.18 145)` | A completed action             |
 | `--warning` | `oklch(0.75 0.15 80)`  | A recoverable problem          |
-| `--error`   | `oklch(0.60 0.20 15)`  | A failed action, invalid input |
+| `--error`   | `oklch(0.6 0.2 15)`  | A failed action, invalid input |
 | `--info`    | `oklch(0.65 0.15 250)` | Neutral information            |
 
 ### Focus
