@@ -1,9 +1,0 @@
-{
-  "default": {
-    "identifier": "default",
-    "description": "The permissions the Arrow main window needs to render the shell.",
-    "local": true,
-    "windows": ["main"],
-    "permissions": ["core:default"]
-  }
-}
