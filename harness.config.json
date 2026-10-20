@@ -4,7 +4,7 @@
     "exec": "pnpm exec"
   },
   "minimumCriteria": 10,
-  "minimumProofs": 9,
+  "minimumProofs": 10,
   "agents": {
     "file": "AGENTS.md",
     "entryPoint": "CLAUDE.md",
@@ -205,6 +205,20 @@
         {
           "path": "apps/desktop/src/__harness_probe.ts",
           "content": "export const probeColor = \"#ff8800\";\n"
+        }
+      ],
+      "expect": {
+        "run": "node scripts/check-theme-discipline.mjs",
+        "exit": "nonzero",
+        "contains": "hardcoded color"
+      }
+    },
+    {
+      "name": "a component hardcodes a named color",
+      "write": [
+        {
+          "path": "apps/desktop/src/__harness_probe.ts",
+          "content": "export const probeColor = \"red\";\n"
         }
       ],
       "expect": {
