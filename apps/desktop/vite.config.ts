@@ -1,4 +1,5 @@
 import { fileURLToPath } from "node:url";
+import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 
@@ -18,6 +19,14 @@ const alias = [
     replacement: `${packagesDir}/theme/src/tokens.css`,
   },
   {
+    find: "@arrow/theme/theme.css",
+    replacement: `${packagesDir}/theme/src/theme.css`,
+  },
+  {
+    find: "@arrow/theme/fonts.css",
+    replacement: `${packagesDir}/theme/src/fonts.css`,
+  },
+  {
     find: "@arrow/ui/ui.css",
     replacement: `${packagesDir}/ui/src/ui.css`,
   },
@@ -28,7 +37,7 @@ const alias = [
 ];
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), tailwindcss()],
   clearScreen: false,
   alias,
   server: {
