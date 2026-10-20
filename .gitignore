@@ -1,0 +1,12 @@
+# Coordinator working file, never committed.
+todo.md
+
+# Isolated worker trees.
+.worktrees/
+
+node_modules/
+dist/
+.turbo/
+target/
+*.tsbuildinfo
+.DS_Store
