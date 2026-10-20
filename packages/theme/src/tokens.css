@@ -1,0 +1,43 @@
+/**
+ * The Arrow design tokens.
+ *
+ * Dark is the first tier: the values below are the dark values, and the light
+ * tier arrives in a later phase. Every color in the product comes from a
+ * variable defined here, so CodeMirror, xterm.js and the React tree read the
+ * same source of truth.
+ */
+
+:root {
+  color-scheme: dark;
+
+  /* Surfaces */
+  --canvas: oklch(0.15 0.005 250);
+  --canvas-soft: oklch(0.18 0.005 250);
+  --canvas-strong: oklch(0.12 0.005 250);
+  --surface: oklch(0.2 0.008 250);
+  --surface-hover: oklch(0.23 0.008 250);
+  --border: oklch(0.25 0.005 250);
+  --border-strong: oklch(0.3 0.005 250);
+
+  /* Text */
+  --ink: oklch(0.93 0.005 90);
+  --ink-secondary: oklch(0.6 0.005 90);
+  --ink-tertiary: oklch(0.45 0.005 90);
+
+  /* Accent */
+  --accent: oklch(0.65 0.25 30);
+  --accent-hover: oklch(0.6 0.25 30);
+  --accent-soft: oklch(0.25 0.08 30);
+
+  /* Focus */
+  --focus-ring: oklch(0.65 0.25 30 / 0.6);
+
+  /* Typography */
+  --font-sans: "Inter", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", "Berkeley Mono", ui-monospace, monospace;
+
+  /* Shape */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+}
