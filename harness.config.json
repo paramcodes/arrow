@@ -79,6 +79,13 @@
               "local/no-raw-json-parse",
               "@typescript-eslint/ban-ts-comment"
             ],
+            "ruleOptions": {
+              "@typescript-eslint/ban-ts-comment": {
+                "ts-expect-error": true,
+                "ts-ignore": true,
+                "ts-nocheck": true
+              }
+            },
             "linterOptions": ["noInlineConfig"]
           },
           {

@@ -383,6 +383,22 @@ const checks = {
         }
       }
 
+      for (const [rule, options] of Object.entries(requirement.ruleOptions ?? {})) {
+        const entry = resolved.rules?.[rule];
+        const settings = Array.isArray(entry) ? entry[1] : undefined;
+        if (typeof settings !== "object" || settings === null) {
+          problems.push(`${rule} holds no options for ${requirement.file}`);
+          continue;
+        }
+        for (const [option, value] of Object.entries(options)) {
+          if (settings[option] !== value) {
+            problems.push(
+              `${rule} sets ${option} to ${JSON.stringify(settings[option])}, ${JSON.stringify(value)} is required`,
+            );
+          }
+        }
+      }
+
       for (const option of requirement.linterOptions ?? []) {
         if (!resolved.linterOptions?.[option]) {
           problems.push(`the linter option ${option} is not set for ${requirement.file}`);
