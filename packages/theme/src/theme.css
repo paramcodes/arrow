@@ -1,0 +1,50 @@
+/**
+ * The Tailwind theme of Arrow.
+ *
+ * This is the Tailwind v4 preset of the product. It maps every design token
+ * of `tokens.css` onto the Tailwind theme namespace, so a utility such as
+ * `bg-canvas` or `text-ink-secondary` reads the token instead of a literal.
+ *
+ * The `inline` option keeps the reference to the runtime variable in the
+ * utility, so a token that changes at runtime changes the utility with it.
+ */
+
+@theme inline {
+  /* Surfaces */
+  --color-canvas: var(--canvas);
+  --color-canvas-soft: var(--canvas-soft);
+  --color-canvas-strong: var(--canvas-strong);
+  --color-surface: var(--surface);
+  --color-surface-hover: var(--surface-hover);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+
+  /* Text */
+  --color-ink: var(--ink);
+  --color-ink-secondary: var(--ink-secondary);
+  --color-ink-tertiary: var(--ink-tertiary);
+
+  /* Accent */
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-soft: var(--accent-soft);
+
+  /* Semantic */
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-error: var(--error);
+  --color-info: var(--info);
+
+  /* Focus */
+  --color-focus-ring: var(--focus-ring);
+
+  /* Typography */
+  --font-sans: var(--font-family-sans);
+  --font-mono: var(--font-family-mono);
+  --font-display: var(--font-family-display);
+
+  /* Shape */
+  --radius-sm: var(--radius-size-sm);
+  --radius-md: var(--radius-size-md);
+  --radius-lg: var(--radius-size-lg);
+}

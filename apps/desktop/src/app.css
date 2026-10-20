@@ -1,33 +1,67 @@
 /**
  * The base styles of the Arrow window.
  *
+ * Tailwind carries the utilities, the preset of `@arrow/theme` carries the
+ * tokens, and this file carries the base layer of the window: the body
+ * defaults, the selection color, the scrollbars and the focus ring.
+ *
  * Every color comes from a token in `@arrow/theme`, so the window follows the
  * dark-first palette without a hardcoded value in this file.
  */
 
-html,
-body,
-#root {
-  height: 100%;
-  margin: 0;
-}
+@import "tailwindcss";
+@import "@arrow/theme/tokens.css";
+@import "@arrow/theme/theme.css";
+@import "@arrow/theme/fonts.css";
 
-body {
-  background: var(--canvas);
-  color: var(--ink);
-  font-family: var(--font-sans);
-  overflow: hidden;
-}
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+    margin: 0;
+  }
 
-.app-root {
-  display: grid;
-  place-items: center;
-  height: 100%;
-}
+  body {
+    background: var(--canvas);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    font-size: 13px;
+    line-height: 1.5;
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
 
-.app-title {
-  color: var(--ink-secondary);
-  font-size: 1.5rem;
-  font-weight: 500;
-  letter-spacing: 0.04em;
+  ::selection {
+    background: var(--accent-soft);
+    color: var(--ink);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-strong) transparent;
+  }
+
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: var(--border-strong);
+    border-radius: var(--radius-size-sm);
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--ink-tertiary);
+  }
 }

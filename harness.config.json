@@ -4,7 +4,7 @@
     "exec": "pnpm exec"
   },
   "minimumCriteria": 10,
-  "minimumProofs": 9,
+  "minimumProofs": 15,
   "agents": {
     "file": "AGENTS.md",
     "entryPoint": "CLAUDE.md",
@@ -214,6 +214,20 @@
       }
     },
     {
+      "name": "a component hardcodes a named color",
+      "write": [
+        {
+          "path": "apps/desktop/src/__harness_probe.ts",
+          "content": "export const probeColor = \"red\";\n"
+        }
+      ],
+      "expect": {
+        "run": "node scripts/check-theme-discipline.mjs",
+        "exit": "nonzero",
+        "contains": "hardcoded color"
+      }
+    },
+    {
       "name": "the workspace ui alias resolves to its entry point",
       "write": [
         {
@@ -224,6 +238,76 @@
       "expect": {
         "run": "${PM_EXEC} vitest run apps/desktop/src/__harness_probe.test.ts",
         "exit": "zero"
+      }
+    },
+    {
+      "name": "a component hardcodes a Tailwind default-palette utility",
+      "write": [
+        {
+          "path": "apps/desktop/src/__harness_probe.tsx",
+          "content": "export const probeClassName = \"bg-red-500\";\n"
+        }
+      ],
+      "expect": {
+        "run": "node scripts/check-theme-discipline.mjs",
+        "exit": "nonzero",
+        "contains": "hardcoded color"
+      }
+    },
+    {
+      "name": "a component hardcodes a modern color function",
+      "write": [
+        {
+          "path": "apps/desktop/src/__harness_probe.css",
+          "content": ".probe {\n  color: color(display-p3 1 0 0);\n  background: hwb(120 0% 0%);\n}\n"
+        }
+      ],
+      "expect": {
+        "run": "node scripts/check-theme-discipline.mjs",
+        "exit": "nonzero",
+        "contains": "hardcoded color"
+      }
+    },
+    {
+      "name": "a component hardcodes a bare channel triplet",
+      "write": [
+        {
+          "path": "apps/desktop/src/__harness_probe_triplet.css",
+          "content": ":root {\n  --background: 222.2 47.4% 11.2%;\n  --foreground: 0 0% 100%;\n}\n"
+        }
+      ],
+      "expect": {
+        "run": "node scripts/check-theme-discipline.mjs",
+        "exit": "nonzero",
+        "contains": "hardcoded color"
+      }
+    },
+    {
+      "name": "a stylesheet outside the old scan bounds is scanned",
+      "write": [
+        {
+          "path": "packages/types/src/__harness_probe.scss",
+          "content": "$probe-color: #ff8800;\n"
+        }
+      ],
+      "expect": {
+        "run": "node scripts/check-theme-discipline.mjs",
+        "exit": "nonzero",
+        "contains": "hardcoded color"
+      }
+    },
+    {
+      "name": "a color literal inside the token package is allowed",
+      "write": [
+        {
+          "path": "packages/theme/src/__harness_probe.css",
+          "content": ":root {\n  --probe: oklch(0.5 0.1 200);\n}\n"
+        }
+      ],
+      "expect": {
+        "run": "node scripts/check-theme-discipline.mjs",
+        "exit": "zero",
+        "contains": "no-hardcoded-colors"
       }
     }
   ],

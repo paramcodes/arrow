@@ -40,6 +40,11 @@
   "linter": {
     "enabled": false
   },
+  "css": {
+    "parser": {
+      "tailwindDirectives": true
+    }
+  },
   "assist": {
     "actions": {
       "source": {
