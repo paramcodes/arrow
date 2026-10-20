@@ -5,14 +5,32 @@
  * Every criterion runs a real check against this repository. A criterion passes
  * only when its check passes. The script exits 0 only when every criterion
  * passes, and it prints the reason for every failure.
+ *
+ * A criterion never checks for a word. A check either runs the thing it
+ * describes, or it reads a structure that a change could actually break: the
+ * resolved ESLint configuration, the shape of a workflow file, the sections of
+ * a procedure, the rows of a log. A file that keeps the words of a rule while
+ * losing the rule fails the check.
+ *
+ * `node scripts/harness-score.mjs --only <criterion>` scores one criterion.
+ * The proof cases use that mode, so a proof case can prove that a criterion
+ * fails when the thing it guards breaks.
  */
 
 import { execSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-const root = path.resolve(process.argv[2] ?? process.cwd());
+import { ESLint } from "eslint";
+
+const argv = process.argv.slice(2);
+const onlyFlag = argv.indexOf("--only");
+const only = onlyFlag === -1 ? null : (argv[onlyFlag + 1] ?? null);
+const positional = argv.filter(
+  (value, index) => !value.startsWith("--") && !(onlyFlag !== -1 && index === onlyFlag + 1),
+);
+const root = path.resolve(positional[0] ?? process.cwd());
 process.chdir(root);
 
 const configPath = process.env.HARNESS_CONFIG ?? "harness.config.json";
@@ -62,49 +80,198 @@ function tail(text, lines = 4) {
   return rows.slice(-lines).join("\n");
 }
 
-function walk(directory) {
-  const found = [];
-  for (const entry of readdirSync(directory, { withFileTypes: true })) {
-    const full = path.join(directory, entry.name);
-    if (entry.isDirectory()) found.push(...walk(full));
-    else found.push(full);
-  }
-  return found;
+/**
+ * The resolved ESLint configuration of one file. The resolver reads the real
+ * config, so a rule that was commented out is missing from the result and the
+ * check that needs it fails.
+ */
+let eslint = null;
+
+async function resolveEslintConfig(file) {
+  eslint ??= new ESLint({ cwd: root });
+  return eslint.calculateConfigForFile(file);
 }
 
-function exportedFunctions(source) {
-  const found = [];
-  const pattern = /export\s+(?:async\s+)?function\s+([A-Za-z0-9_]+)\s*\(/g;
-  let match = pattern.exec(source);
-  while (match) {
-    const start = pattern.lastIndex;
-    let index = start;
-    let depth = 1;
-    while (index < source.length && depth > 0) {
-      const character = source[index];
-      if (character === "(" || character === "{" || character === "[") depth += 1;
-      else if (character === ")" || character === "}" || character === "]") depth -= 1;
-      index += 1;
+function severityOf(value) {
+  if (typeof value === "number") return value;
+  if (Array.isArray(value) && typeof value[0] === "number") return value[0];
+  return undefined;
+}
+
+/**
+ * A small reader for the YAML subset this repository writes: nested maps,
+ * sequences of maps, inline sequences and block scalars. It exists because the
+ * checks below read the structure of a workflow file, and a substring search
+ * cannot tell a command that runs from a comment that mentions one.
+ */
+function indentOf(line) {
+  return line.length - line.trimStart().length;
+}
+
+function nextContentLine(lines, from) {
+  for (let index = from; index < lines.length; index += 1) {
+    const trimmed = lines[index].trim();
+    if (trimmed === "" || trimmed.startsWith("#")) continue;
+    return index;
+  }
+  return -1;
+}
+
+function parseScalar(raw) {
+  const value = String(raw).trim();
+  if (value === "") return "";
+  if (value.length > 1 && value.startsWith('"') && value.endsWith('"')) return value.slice(1, -1);
+  if (value.length > 1 && value.startsWith("'") && value.endsWith("'")) return value.slice(1, -1);
+  if (value.startsWith("[") && value.endsWith("]")) {
+    const inner = value.slice(1, -1).trim();
+    if (inner === "") return [];
+    return inner.split(",").map((item) => parseScalar(item));
+  }
+  if (value === "true") return true;
+  if (value === "false") return false;
+  if (value === "null" || value === "~") return null;
+  const comment = value.indexOf(" #");
+  return comment === -1 ? value : value.slice(0, comment).trim();
+}
+
+function parseYamlMapping(lines, start, indent) {
+  const map = {};
+  let index = start;
+
+  while (index < lines.length) {
+    const content = nextContentLine(lines, index);
+    if (content === -1) {
+      index = lines.length;
+      break;
     }
-    found.push({ name: match[1], params: source.slice(start, index - 1) });
-    match = pattern.exec(source);
-  }
-  return found;
-}
-
-function readAllowlist(file) {
-  const allowlist = new Map();
-  if (!file || !existsSync(file)) return allowlist;
-  for (const line of readFileSync(file, "utf8").split("\n")) {
+    const line = lines[content];
+    if (indentOf(line) !== indent) break;
     const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith("#")) continue;
-    const match = trimmed.match(/^(\S+)\s*(?:—|::|--)\s*(.+)$/);
+    if (trimmed.startsWith("-")) break;
+
+    const match = trimmed.match(/^(?<key>"[^"]*"|'[^']*'|[^:]+):(?:\s+(?<value>.*))?$/);
     if (!match) {
-      throw new Error(`${file} has an entry without a reason: ${trimmed}`);
+      index = content + 1;
+      continue;
     }
-    allowlist.set(match[1], match[2].trim());
+
+    const key = parseScalar(match.groups.key);
+    const rawValue = (match.groups.value ?? "").trim();
+
+    if (rawValue === "") {
+      const next = nextContentLine(lines, content + 1);
+      if (next !== -1 && indentOf(lines[next]) > indent) {
+        const nested = parseYamlBlock(lines, next, indentOf(lines[next]));
+        map[key] = nested.value;
+        index = nested.index;
+      } else {
+        map[key] = null;
+        index = content + 1;
+      }
+      continue;
+    }
+
+    if (rawValue === "|" || rawValue === ">" || rawValue === "|-" || rawValue === ">-") {
+      const block = [];
+      let cursor = content + 1;
+      while (cursor < lines.length) {
+        const candidate = lines[cursor];
+        if (candidate.trim() !== "" && indentOf(candidate) <= indent) break;
+        block.push(candidate.trim());
+        cursor += 1;
+      }
+      map[key] = block.join("\n").trim();
+      index = cursor;
+      continue;
+    }
+
+    map[key] = parseScalar(rawValue);
+    index = content + 1;
   }
-  return allowlist;
+
+  return { value: map, index };
+}
+
+function parseYamlSequence(lines, start, indent) {
+  const items = [];
+  let index = start;
+
+  while (index < lines.length) {
+    const content = nextContentLine(lines, index);
+    if (content === -1) {
+      index = lines.length;
+      break;
+    }
+    const line = lines[content];
+    if (indentOf(line) !== indent) break;
+    const trimmed = line.trim();
+    if (!trimmed.startsWith("-")) break;
+
+    const rest = trimmed.slice(1).trim();
+    if (rest === "") {
+      const nested = parseYamlBlock(lines, content + 1, indent + 2);
+      items.push(nested.value);
+      index = nested.index;
+      continue;
+    }
+
+    if (/^(?:"[^"]*"|'[^']*'|[^:]+):(\s|$)/.test(rest)) {
+      const itemIndent = indent + 2;
+      const patched = lines.slice();
+      patched[content] = " ".repeat(itemIndent) + rest;
+      const nested = parseYamlBlock(patched, content, itemIndent);
+      items.push(nested.value);
+      index = nested.index;
+      continue;
+    }
+
+    items.push(parseScalar(rest));
+    index = content + 1;
+  }
+
+  return { value: items, index };
+}
+
+function parseYamlBlock(lines, start, indent) {
+  const content = nextContentLine(lines, start);
+  if (content === -1) return { value: null, index: lines.length };
+  const trimmed = lines[content].trim();
+  if (trimmed.startsWith("-")) return parseYamlSequence(lines, content, indent);
+  return parseYamlMapping(lines, content, indent);
+}
+
+function parseYaml(text) {
+  const lines = text.split("\n");
+  const first = nextContentLine(lines, 0);
+  if (first === -1) return {};
+  return parseYamlBlock(lines, first, indentOf(lines[first])).value;
+}
+
+function readPath(document, dottedPath) {
+  let node = document;
+  for (const segment of dottedPath.split(".")) {
+    if (node === null || node === undefined || typeof node !== "object") return undefined;
+    node = node[segment];
+  }
+  return node;
+}
+
+function requirementHolds(text, requirement) {
+  if (typeof text !== "string") return false;
+  for (const needle of requirement.contains ?? []) {
+    if (!text.includes(needle)) return false;
+  }
+  for (const needle of requirement.notContains ?? []) {
+    if (text.includes(needle)) return false;
+  }
+  return true;
+}
+
+function describeRequirement(requirement) {
+  const parts = [];
+  if (requirement.contains) parts.push(`holds ${requirement.contains.join(", ")}`);
+  if (requirement.notContains) parts.push(`holds none of ${requirement.notContains.join(", ")}`);
+  return parts.join(" and ");
 }
 
 const checks = {
@@ -191,7 +358,230 @@ const checks = {
     return { ok: true };
   },
 
-  agentsFile(check) {
+  /**
+   * Reads the resolved ESLint configuration and asserts that the rules of the
+   * source tree are switched on as errors. A rule that was commented out in
+   * `eslint.config.mjs` is missing from the resolved configuration, so this
+   * check fails even when the words of the rule are still in the file.
+   */
+  async eslintRules(check) {
+    const problems = [];
+
+    for (const requirement of check.require ?? []) {
+      let resolved;
+      try {
+        resolved = await resolveEslintConfig(requirement.file);
+      } catch (error) {
+        problems.push(`the ESLint configuration for ${requirement.file} failed: ${error.message}`);
+        continue;
+      }
+
+      for (const rule of requirement.rules ?? []) {
+        const severity = severityOf(resolved.rules?.[rule]);
+        if (severity !== 2) {
+          problems.push(`${rule} is not an error rule for ${requirement.file}`);
+        }
+      }
+
+      for (const option of requirement.linterOptions ?? []) {
+        if (!resolved.linterOptions?.[option]) {
+          problems.push(`the linter option ${option} is not set for ${requirement.file}`);
+        }
+      }
+    }
+
+    if (problems.length > 0) {
+      return {
+        ok: false,
+        reason: `${problems.length} rules are not switched on`,
+        detail: problems.join("\n"),
+      };
+    }
+    return { ok: true };
+  },
+
+  /**
+   * Reads the structure of a YAML file and asserts what must be in it. A
+   * command that was deleted fails the check even when its key survives.
+   */
+  yamlStructure(check) {
+    if (!existsSync(check.path)) return { ok: false, reason: `${check.path} is missing` };
+
+    const document = parseYaml(readFileSync(check.path, "utf8"));
+    const problems = [];
+
+    for (const requirement of check.require ?? []) {
+      const node = readPath(document, requirement.path);
+      if (node === undefined) {
+        problems.push(`${requirement.path} is missing from ${check.path}`);
+        continue;
+      }
+
+      if (requirement.key === undefined) {
+        if (!requirementHolds(node, requirement)) {
+          problems.push(
+            `${requirement.path} in ${check.path} does not ${describeRequirement(requirement)}`,
+          );
+        }
+        continue;
+      }
+
+      const elements = Array.isArray(node) ? node : [node];
+      const found = elements.some(
+        (element) =>
+          element !== null &&
+          typeof element === "object" &&
+          requirementHolds(element[requirement.key], requirement),
+      );
+      if (!found) {
+        problems.push(
+          `no "${requirement.key}" in ${requirement.path} of ${check.path} does ${describeRequirement(requirement)}`,
+        );
+      }
+    }
+
+    if (problems.length > 0) {
+      return {
+        ok: false,
+        reason: `${check.path} does not hold what the rule requires`,
+        detail: problems.join("\n"),
+      };
+    }
+    return { ok: true };
+  },
+
+  /**
+   * Reads the sections of a procedure. The sections must exist, and each one
+   * must hold enough of the rule to be usable.
+   */
+  markdownSections(check) {
+    if (!existsSync(check.path)) return { ok: false, reason: `${check.path} is missing` };
+
+    const lines = readFileSync(check.path, "utf8").split("\n");
+    const problems = [];
+
+    for (const section of check.sections ?? []) {
+      const start = lines.findIndex((line) => line.trim() === section.heading);
+      if (start === -1) {
+        problems.push(`${section.heading} is missing from ${check.path}`);
+        continue;
+      }
+
+      let end = lines.length;
+      for (let index = start + 1; index < lines.length; index += 1) {
+        if (lines[index].trim().startsWith("#")) {
+          end = index;
+          break;
+        }
+      }
+
+      const body = lines
+        .slice(start + 1, end)
+        .filter((line) => line.trim() !== "")
+        .join("\n");
+      const bodyLines = body.split("\n").filter((line) => line.trim() !== "").length;
+      const minimum = section.minLines ?? 1;
+
+      if (bodyLines < minimum) {
+        problems.push(
+          `${section.heading} holds ${bodyLines} lines, at least ${minimum} are required`,
+        );
+      }
+      for (const needle of section.contains ?? []) {
+        if (!body.includes(needle)) {
+          problems.push(`${section.heading} does not name ${needle}`);
+        }
+      }
+    }
+
+    if (problems.length > 0) {
+      return {
+        ok: false,
+        reason: `${check.path} does not hold the whole procedure`,
+        detail: problems.join("\n"),
+      };
+    }
+    return { ok: true };
+  },
+
+  /**
+   * Reads the rows of a log table. Every row must be complete, and the
+   * guardrail it names must exist, so a row cannot point at nothing.
+   */
+  markdownTable(check) {
+    if (!existsSync(check.path)) return { ok: false, reason: `${check.path} is missing` };
+
+    const rows = readFileSync(check.path, "utf8")
+      .split("\n")
+      .filter((line) => line.trim().startsWith("|"));
+    const problems = [];
+
+    if (rows.length < 2) {
+      return { ok: false, reason: `${check.path} holds no table` };
+    }
+
+    const isSeparator = (row) => /^[|\s:-]+$/.test(row);
+    const data = rows.slice(1).filter((row) => !isSeparator(row));
+    const minimum = check.minRows ?? 1;
+
+    if (data.length < minimum) {
+      problems.push(`${check.path} holds ${data.length} rows, at least ${minimum} are required`);
+    }
+
+    for (const [index, row] of data.entries()) {
+      const cells = row
+        .trim()
+        .replace(/^\|/, "")
+        .replace(/\|$/, "")
+        .split("|")
+        .map((cell) => cell.trim());
+      const columns = check.columns ?? cells.length;
+
+      if (cells.length < columns) {
+        problems.push(
+          `row ${index + 1} of ${check.path} holds ${cells.length} cells, ${columns} are required`,
+        );
+        continue;
+      }
+
+      for (let cell = 0; cell < columns; cell += 1) {
+        if (cells[cell] === "") {
+          problems.push(
+            `row ${index + 1} of ${check.path} holds an empty cell in column ${cell + 1}`,
+          );
+        }
+      }
+
+      for (const column of check.pathColumns ?? []) {
+        const cell = cells[column];
+        if (!cell) continue;
+        for (const token of cell.match(/`([^`]+)`/g) ?? []) {
+          const name = token.slice(1, -1);
+          if (!looksLikePath(name)) continue;
+          if (!existsSync(path.join(root, name))) {
+            problems.push(`row ${index + 1} of ${check.path} names ${name}, which does not exist`);
+          }
+        }
+      }
+    }
+
+    if (problems.length > 0) {
+      return {
+        ok: false,
+        reason: `${check.path} does not hold a complete row for every mistake`,
+        detail: problems.join("\n"),
+      };
+    }
+    return { ok: true };
+  },
+
+  /**
+   * Reads the rules of `AGENTS.md`. Every rule must name an enforcement path
+   * that exists and that can fail. A document cannot fail, so a rule may not
+   * name one. The registry in the config names the mechanism of the rules that
+   * need one, and the check proves the mechanism is live.
+   */
+  async agentsFile(check) {
     const settings = { ...config.agents, ...check };
     const file = settings.file ?? "AGENTS.md";
     if (!existsSync(file)) return { ok: false, reason: `${file} is missing` };
@@ -219,10 +609,53 @@ const checks = {
         problems.push(`a rule names no enforcement path: ${rule}`);
         continue;
       }
-      if (!existsSync(path.join(root, match[1]))) {
-        problems.push(`${match[1]} does not exist`);
+      const target = match[1];
+      if (target.endsWith(".md")) {
+        problems.push(`${target} is a document, and a document cannot fail`);
+        continue;
+      }
+      if (!existsSync(path.join(root, target))) {
+        problems.push(`${target} does not exist`);
       }
     }
+
+    for (const entry of settings.enforcement ?? []) {
+      const matched = rules.filter((rule) => rule.includes(entry.match));
+      if (matched.length !== 1) {
+        problems.push(
+          `the enforcement entry "${entry.match}" matches ${matched.length} rules of ${file}`,
+        );
+        continue;
+      }
+
+      const target = matched[0].match(/Enforced by: (\S+)$/)?.[1];
+      if (target !== entry.path) {
+        problems.push(
+          `the rule "${entry.match}" is enforced by ${target}, the registry names ${entry.path}`,
+        );
+        continue;
+      }
+
+      if (entry.kind === "eslintRule") {
+        let resolved;
+        try {
+          resolved = await resolveEslintConfig(entry.file);
+        } catch (error) {
+          problems.push(`the ESLint configuration for ${entry.file} failed: ${error.message}`);
+          continue;
+        }
+        if (severityOf(resolved.rules?.[entry.rule]) !== 2) {
+          problems.push(`${entry.rule} is not an error rule for ${entry.file}`);
+        }
+      }
+
+      if (entry.kind === "criterion") {
+        if (!criteria.some((criterion) => criterion.id === entry.criterion)) {
+          problems.push(`the criterion ${entry.criterion} does not exist`);
+        }
+      }
+    }
+
     if (problems.length > 0) {
       return {
         ok: false,
@@ -246,53 +679,31 @@ const checks = {
 
     return { ok: true };
   },
-
-  actorParams(check) {
-    const settings = { ...config.dataAccess, ...check };
-    if (!settings.dir) return { ok: false, reason: "dataAccess.dir is not set" };
-    if (!existsSync(settings.dir)) return { ok: false, reason: `${settings.dir} is missing` };
-
-    const actor = new RegExp(settings.actorPattern ?? "\\b(userId|ownerId|viewerId|actorId)\\b");
-    const allowlist = readAllowlist(settings.allowlist);
-    const problems = [];
-
-    const files = walk(settings.dir).filter(
-      (file) => file.endsWith(".ts") && !file.includes(".test.ts") && !file.includes(".spec.ts"),
-    );
-
-    const exported = new Map();
-    for (const file of files) {
-      for (const fn of exportedFunctions(readFileSync(file, "utf8"))) {
-        exported.set(fn.name, fn);
-        if (actor.test(fn.params)) continue;
-        if (allowlist.has(fn.name)) continue;
-        problems.push(`${fn.name} in ${file} takes no actor id and is not on the allowlist`);
-      }
-    }
-
-    for (const name of allowlist.keys()) {
-      if (!exported.has(name)) {
-        problems.push(
-          `${name} is on the allowlist but is not an exported function in ${settings.dir}`,
-        );
-      }
-    }
-
-    if (problems.length > 0) {
-      return {
-        ok: false,
-        reason: `${problems.length} data functions break the actor rule`,
-        detail: problems.join("\n"),
-      };
-    }
-    return { ok: true };
-  },
 };
+
+/**
+ * True when a token in a table cell names a file. A rule name such as
+ * `local/no-cross-layer-import` is not a file, and a command such as
+ * `pnpm install` is not a file.
+ */
+function looksLikePath(token) {
+  if (token.includes(" ")) return false;
+  if (/^\.{0,2}\//.test(token)) return true;
+  return /\.[A-Za-z0-9]+$/.test(token);
+}
+
+const selected = only
+  ? criteria.filter((criterion) => (criterion.id ?? criterion.check?.type) === only)
+  : criteria;
+
+if (only && selected.length === 0) {
+  die(`no criterion is named ${only}`);
+}
 
 let passed = 0;
 let failed = 0;
 
-for (const criterion of criteria) {
+for (const criterion of selected) {
   const check = criterion.check ?? {};
   const handler = checks[check.type];
   const label = criterion.id ?? check.type ?? "criterion";
@@ -305,7 +716,7 @@ for (const criterion of criteria) {
 
   let result;
   try {
-    result = handler(check);
+    result = await handler(check);
   } catch (error) {
     result = { ok: false, reason: error.message };
   }
@@ -336,11 +747,11 @@ if (criteria.length < minimum) {
   console.log(`PASS  coverage  the harness scores ${criteria.length} criteria`);
 }
 
-if (Array.isArray(config.notes) && config.notes.length > 0) {
+if (Array.isArray(config.notes) && config.notes.length > 0 && !only) {
   console.log("\nharness notes:");
   for (const note of config.notes) console.log(`  - ${note}`);
 }
 
-console.log(`\nharness: ${passed}/${criteria.length} criteria passed, ${failed} failed`);
+console.log(`\nharness: ${passed}/${selected.length} criteria passed, ${failed} failed`);
 
 if (failed > 0) process.exit(1);

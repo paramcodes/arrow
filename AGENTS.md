@@ -23,11 +23,11 @@ below names the path that fails when the rule breaks.
 - Every color comes from a token in `packages/theme`, and no component hardcodes one. Enforced by: scripts/check-theme-discipline.mjs
 - The source tree has no escape hatches: inline lint config, `@ts-ignore`, `@ts-expect-error`, skipped tests and raw `JSON.parse` are errors. Enforced by: eslint.config.mjs
 - TypeScript is strict in every workspace, and the compiler refuses an implicit `any`. Enforced by: tsconfig.base.json
-- API keys never enter the webview, the DOM, the bundle, the logs or a frontend store; they live in Rust and the OS keychain. Enforced by: docs/adr/0005-ai-integration-architecture.md
-- Workspace facts live in Zustand, per-item facts live in Jotai and async workflows live in XState; no store imports another tier. Enforced by: docs/adr/0004-state-management-tiering.md
+- API keys never enter the webview, the DOM, the bundle, the logs or a frontend store; they live in Rust and the OS keychain. The lint rule `local/no-secret-in-webview` holds the webview side, and `docs/adr/0005-ai-integration-architecture.md` records the decision. Enforced by: eslint.config.mjs
+- Workspace facts live in Zustand, per-item facts live in Jotai and async workflows live in XState; no store imports another tier. The lint rule `local/no-cross-tier-store` holds the boundary, and `docs/adr/0004-state-management-tiering.md` records the decision. Enforced by: eslint.config.mjs
 - Every rule in this file names the path that enforces it, and this file stays under 100 lines. Enforced by: scripts/harness-score.mjs
 - Every mistake earns a permanent check, a proof case and a log row. Enforced by: scripts/prove-guardrails.mjs
-- A mistake that returns after its guardrail existed is a guardrail failure, and the fix moves to a stronger layer. Enforced by: docs/ratchet.md
+- A mistake that returns after its guardrail existed is a guardrail failure, and the fix moves to a stronger layer. The procedure is written in `docs/ratchet.md` and the `ratchet` criterion checks it. Enforced by: scripts/harness-score.mjs
 - The pre-commit gate runs format, lint and typecheck on the staged files. Enforced by: lefthook.yml
 - CI runs the same canonical commands and scores the harness. Enforced by: .github/workflows/ci.yml
 - Work happens on a task branch, never on the default branch. Enforced by: scripts/guard-branch.sh

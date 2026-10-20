@@ -55,6 +55,7 @@ export default defineConfig([
         "error",
         { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
       ],
+      "local/no-cross-tier-store": "error",
     },
   },
   {
@@ -66,6 +67,7 @@ export default defineConfig([
     rules: {
       "local/no-raw-json-parse": "error",
       "local/no-inline-config": "error",
+      "local/no-secret-in-webview": "error",
       "no-console": ["error", { allow: ["error", "warn"] }],
       "@typescript-eslint/ban-ts-comment": [
         "error",

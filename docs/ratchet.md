@@ -34,6 +34,8 @@ rerun it.
   case writes a file that breaks the rule, runs the checker that owns the rule, and asserts the
   checker failed.
 - A behavioural fix gets a test.
+- A guardrail that cannot run offline, such as a change to a CI workflow, gets the strongest check
+  that can run offline, and the log row says plainly that it is not a proof of the runner.
 
 A fix with no proof case is not done. The case is the artifact a reviewer runs, and a guardrail
 without one cannot be shown to catch the mistake it was made for.
