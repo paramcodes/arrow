@@ -1,4 +1,5 @@
 import { APP_NAME } from "@arrow/types";
+import { Surface } from "@arrow/ui";
 
 /**
  * The shell of Arrow.
@@ -9,7 +10,9 @@ import { APP_NAME } from "@arrow/types";
 export function App() {
   return (
     <main className="app-root" data-testid="app-root">
-      <h1 className="app-title">{APP_NAME}</h1>
+      <Surface>
+        <h1 className="app-title">{APP_NAME}</h1>
+      </Surface>
     </main>
   );
 }

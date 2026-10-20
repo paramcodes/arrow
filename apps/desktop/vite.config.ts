@@ -7,6 +7,10 @@ const packagesDir = fileURLToPath(new URL("../../packages", import.meta.url));
 /**
  * The workspace packages resolve to their source, so a change in a package is
  * live in the app without a rebuild step.
+ *
+ * The alias names the entry point without its extension on purpose. A package
+ * entry is either `index.ts` or `index.tsx`, and the resolver probes both. The
+ * same rule lives in `vitest.config.ts` and in `tsconfig.base.json`.
  */
 const alias = [
   {
@@ -19,7 +23,7 @@ const alias = [
   },
   {
     find: /^@arrow\/([a-z-]+)$/,
-    replacement: `${packagesDir}/$1/src/index.ts`,
+    replacement: `${packagesDir}/$1/src/index`,
   },
 ];
 

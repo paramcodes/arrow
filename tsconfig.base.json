@@ -23,10 +23,10 @@
     "skipLibCheck": true,
     "useDefineForClassFields": true,
     "paths": {
-      "@arrow/editor-core": ["./packages/editor-core/src/index.ts"],
-      "@arrow/theme": ["./packages/theme/src/index.ts"],
-      "@arrow/types": ["./packages/types/src/index.ts"],
-      "@arrow/ui": ["./packages/ui/src/index.ts"]
+      "@arrow/editor-core": ["./packages/editor-core/src/index"],
+      "@arrow/theme": ["./packages/theme/src/index"],
+      "@arrow/types": ["./packages/types/src/index"],
+      "@arrow/ui": ["./packages/ui/src/index"]
     }
   }
 }
