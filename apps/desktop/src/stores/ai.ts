@@ -48,6 +48,39 @@ export const DEFAULT_MODELS: Readonly<Record<AiProvider, string>> = {
   google: "gemini-2.0-flash",
 };
 
+/** One model the settings offer. */
+export interface ModelOption {
+  /** The id the provider knows the model by. */
+  readonly id: string;
+  /** The name the settings show. */
+  readonly label: string;
+}
+
+/**
+ * The models of every provider, in the order the selector shows them.
+ *
+ * The list of the models belongs to the provider, so the selector shows the
+ * models of the provider the reader chose and nothing else. The ids are the
+ * ones the shell knows, so a model the reader picks is a model the shell can
+ * address.
+ */
+export const PROVIDER_MODELS: Readonly<Record<AiProvider, readonly ModelOption[]>> = {
+  anthropic: [
+    { id: "claude-sonnet-4-5", label: "Claude Sonnet 4.5" },
+    { id: "claude-opus-4-1", label: "Claude Opus 4.1" },
+    { id: "claude-haiku-4-5", label: "Claude Haiku 4.5" },
+  ],
+  openai: [
+    { id: "gpt-4o", label: "GPT-4o" },
+    { id: "gpt-4o-mini", label: "GPT-4o mini" },
+    { id: "o3-mini", label: "o3-mini" },
+  ],
+  google: [
+    { id: "gemini-2.0-flash", label: "Gemini 2.0 Flash" },
+    { id: "gemini-2.5-pro", label: "Gemini 2.5 Pro" },
+  ],
+};
+
 /** The facts the store holds before the reader changes anything. */
 export const DEFAULT_AI_FACTS: AiFacts = {
   provider: "anthropic",
