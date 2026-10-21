@@ -20,9 +20,9 @@
       {
         "match": "The frontend boots in a plain browser",
         "path": "apps/desktop/e2e/smoke.spec.ts",
-        "kind": "fileShape",
-        "minLines": 8,
-        "contains": ["@playwright/test", "test(", "page.goto(", "expect("]
+        "kind": "command",
+        "run": "pnpm exec playwright test apps/desktop/e2e/smoke.spec.ts",
+        "contains": "the app boots to a blank Arrow window"
       },
       {
         "match": "Every color comes from a token in `packages/theme`",
@@ -795,7 +795,7 @@
       "expect": {
         "run": "node scripts/harness-score.mjs --only entry-point",
         "exit": "nonzero",
-        "contains": "page.goto("
+        "contains": "did not print the app boots to a blank Arrow window"
       }
     },
     {
