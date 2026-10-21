@@ -5,9 +5,21 @@
  * the desktop app and never reaches for Tauri, so the same engine runs in a
  * browser, in a test and inside the shell.
  *
- * The CodeMirror 6 integration lands in phase 2. This module carries the
- * contract that integration will fill.
+ * The module exports the three pieces the shell needs: the base extension
+ * bundle every document opens with, the theme that paints it, and the React
+ * component that owns the life of the view.
  */
+
+export { Editor, type EditorProps } from "./Editor";
+export { baseExtensions } from "./extensions/base";
+export { arrowKeymap } from "./extensions/keymaps";
+export { contentMarker } from "./extensions/marker";
+export { arrowDarkTheme, arrowHighlightStyle } from "./extensions/theme";
+export {
+  languageFor,
+  supportedLanguageIds,
+  supportedLanguages,
+} from "./languages";
 
 /** One open document. */
 export interface EditorDocument {
