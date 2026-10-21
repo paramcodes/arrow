@@ -10,13 +10,19 @@
  * component that owns the life of the view.
  */
 
+import { PLAIN_TEXT_LANGUAGE } from "./languages";
+
 export { Editor, type EditorProps } from "./Editor";
+export type { EditorView } from "@codemirror/view";
 export { baseExtensions } from "./extensions/base";
 export { arrowKeymap } from "./extensions/keymaps";
+export { selectionListener, type SelectionChange } from "./extensions/listeners";
 export { contentMarker } from "./extensions/marker";
 export { arrowDarkTheme, arrowHighlightStyle } from "./extensions/theme";
 export {
   languageFor,
+  languageForPath,
+  PLAIN_TEXT_LANGUAGE,
   supportedLanguageIds,
   supportedLanguages,
 } from "./languages";
@@ -28,9 +34,6 @@ export interface EditorDocument {
   readonly text: string;
   readonly dirty: boolean;
 }
-
-/** The language of a document Arrow does not recognise. */
-export const PLAIN_TEXT_LANGUAGE = "plaintext";
 
 /** Build an empty document. */
 export function createEmptyDocument(
