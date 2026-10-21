@@ -6,19 +6,19 @@ API key lives.
 
 [![CI](https://github.com/paramcodes/arrow/actions/workflows/ci.yml/badge.svg)](https://github.com/paramcodes/arrow/actions/workflows/ci.yml)
 
-The window of Arrow: the file tree on the left, the editor area in the middle, the status bar at
-the bottom.
+A file open in the editor, with the completion of the AI feature as ghost text after the caret. The
+tree carries the `M`, `U` and `D` badges of git, and the status bar shows the state of the AI
+feature on the right.
 
-![The window of Arrow](docs/images/arrow-shell.png)
+![A file open with the ghost text of the AI feature and the badges of the tree](docs/images/ghost-text.png)
 
-The completion of the AI feature arrives as ghost text after the caret, and the tree carries the
-`M`, `U` and `D` badges of git.
-
-![The ghost text of the AI feature and the badges of the tree](docs/images/ghost-text.png)
-
-The command palette searches the commands of the shell.
+The command palette finds a command of the shell from a few letters.
 
 ![The command palette](docs/images/command-palette.png)
+
+A fresh window of Arrow, before a file is open.
+
+![The window of Arrow with no file open](docs/images/arrow-shell.png)
 
 ## What it does
 
