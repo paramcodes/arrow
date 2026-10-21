@@ -170,6 +170,41 @@ function reportCrossLayerImport(context, node, source, options) {
   }
 }
 
+/**
+ * The source of an import, when it can be resolved without running the code.
+ * A string literal and a template without a hole in it are resolved. A
+ * variable, or a template that interpolates, is not: the source is only known
+ * at run time, so no boundary can be checked against it.
+ */
+function staticSource(node) {
+  if (!node) return null;
+  if (node.type === "Literal" && typeof node.value === "string") return node.value;
+  if (
+    node.type === "TemplateLiteral" &&
+    node.expressions.length === 0 &&
+    node.quasis.length === 1
+  ) {
+    return node.quasis[0].value.cooked ?? node.quasis[0].value.raw;
+  }
+  return null;
+}
+
+/**
+ * Names the source of an import that cannot be resolved, so the message says
+ * what the rule could not check.
+ */
+function describeSource(node) {
+  if (!node) return "nothing";
+  if (node.type === "Identifier") return `the variable ${node.name}`;
+  if (node.type === "TemplateLiteral") {
+    return `a template with ${node.expressions.length} expression in it`;
+  }
+  return node.type;
+}
+
+const UNRESOLVED_SOURCE =
+  "The source of this import is not known until the code runs, so the boundary cannot be checked. Use a string literal so the rule can read it.";
+
 const noCrossLayerImport = {
   meta: {
     type: "problem",
@@ -207,16 +242,36 @@ const noCrossLayerImport = {
       },
 
       ImportExpression(node) {
-        const source = node.source;
-        if (!source || source.type !== "Literal" || typeof source.value !== "string") return;
-        reportCrossLayerImport(context, node, source.value, settings);
+        const source = staticSource(node.source);
+        if (source === null) {
+          context.report({
+            node,
+            messageId: "crossLayer",
+            data: {
+              detail: `${describeSource(node.source)} is not a known source. ${UNRESOLVED_SOURCE}`,
+            },
+          });
+          return;
+        }
+        reportCrossLayerImport(context, node, source, settings);
       },
 
       CallExpression(node) {
         if (node.callee.type !== "Identifier" || node.callee.name !== "require") return;
         const argument = node.arguments[0];
-        if (!argument || argument.type !== "Literal" || typeof argument.value !== "string") return;
-        reportCrossLayerImport(context, node, argument.value, settings);
+        if (!argument) return;
+        const source = staticSource(argument);
+        if (source === null) {
+          context.report({
+            node,
+            messageId: "crossLayer",
+            data: {
+              detail: `${describeSource(argument)} is not a known source. ${UNRESOLVED_SOURCE}`,
+            },
+          });
+          return;
+        }
+        reportCrossLayerImport(context, node, source, settings);
       },
     };
   },

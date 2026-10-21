@@ -52,6 +52,56 @@ try {
 const packageManager = config.packageManager ?? "pnpm";
 const criteria = Array.isArray(config.criteria) ? config.criteria : [];
 
+/**
+ * The criteria the harness holds, and the command each one runs. The list
+ * lives in this file, not only in `harness.config.json`, so that editing the
+ * config alone cannot weaken the gate: a criterion that is deleted, renamed or
+ * duplicated fails the score, and a command criterion that stops running the
+ * command it is supposed to run fails the score too.
+ *
+ * Adding a criterion is allowed. It is a deliberate act of editing this list.
+ */
+const EXPECTED_CRITERIA = {
+  boundaries: { run: "${PM} arch" },
+  "theme-discipline": { run: "node scripts/check-theme-discipline.mjs" },
+  proofs: { run: "${PM} prove" },
+  "escape-hatches": {},
+  "entry-point": {},
+  "local-gate": {},
+  ci: {},
+  ratchet: {},
+  "mistake-log": {},
+  verify: { run: "${PM} verify" },
+};
+
+const EXPECTED_CRITERION_IDS = Object.keys(EXPECTED_CRITERIA);
+
+/**
+ * A command that exits 0 without proving anything. A criterion that runs one
+ * of these scores as if it had checked the thing it names.
+ */
+const NOOP_COMMANDS = new Set([
+  "true",
+  "false",
+  ":",
+  "0",
+  "exit 0",
+  "exit 1",
+  "echo",
+  "echo hit",
+  "noop",
+  "nothing",
+  "yes",
+]);
+
+function isNoopCommand(command) {
+  const trimmed = String(command).trim();
+  if (trimmed === "") return true;
+  if (NOOP_COMMANDS.has(trimmed)) return true;
+  if (NOOP_COMMANDS.has(trimmed.toLowerCase())) return true;
+  return false;
+}
+
 function expand(text) {
   return String(text)
     .replaceAll("${PM}", packageManager)
@@ -272,6 +322,135 @@ function describeRequirement(requirement) {
   if (requirement.contains) parts.push(`hold ${requirement.contains.join(", ")}`);
   if (requirement.notContains) parts.push(`hold none of ${requirement.notContains.join(", ")}`);
   return parts.join(" and ");
+}
+
+/**
+ * The file a command runs. It is the token of the command that names a script
+ * in this repository.
+ */
+function commandScript(command) {
+  return String(command)
+    .split(/\s+/)
+    .find((token) => /\.(mjs|cjs|js|ts|sh|yml|yaml)$/.test(token) && token.includes("/"));
+}
+
+/**
+ * Reads a JSON file of the repository. A file that is not JSON fails the check
+ * that reads it, rather than the run.
+ */
+function readJsonFile(file) {
+  try {
+    return JSON.parse(readFileSync(path.join(root, file), "utf8"));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Validates one entry of the enforcement registry of `AGENTS.md`.
+ *
+ * A rule in `AGENTS.md` names the path that enforces it. A path that exists
+ * proves nothing: the file can hold the words of a rule while the rule is
+ * gone. So every rule names a kind, and the kind decides how the path is
+ * checked.
+ *
+ * - `eslintRule` reads the resolved ESLint configuration and holds the rule
+ *   on as an error.
+ * - `tsconfig` reads the compiler options and holds the strict family on.
+ * - `yamlStructure` reads the structure of a workflow file.
+ * - `criterion` holds a criterion of the harness.
+ * - `command` runs the command and holds its output.
+ * - `fileShape` reads the file and holds the shape the rule claims.
+ *
+ * The return value is the reason the rule is not enforced, or null when the
+ * mechanism is live.
+ */
+async function validateEnforcement(entry) {
+  switch (entry.kind) {
+    case "eslintRule": {
+      const names = entry.rules ?? (entry.rule ? [entry.rule] : []);
+      if (names.length === 0) return `the registry entry "${entry.match}" names no ESLint rule`;
+      let resolved;
+      try {
+        resolved = await resolveEslintConfig(entry.file);
+      } catch (error) {
+        return `the ESLint configuration for ${entry.file} failed: ${error.message}`;
+      }
+      for (const name of names) {
+        if (severityOf(resolved.rules?.[name]) !== 2) {
+          return `${name} is not an error rule for ${entry.file}`;
+        }
+      }
+      return null;
+    }
+
+    case "tsconfig": {
+      const document = readJsonFile(entry.path);
+      if (!document) return `${entry.path} is not readable JSON`;
+      const options = document.compilerOptions ?? {};
+      const implied = entry.impliedFlags ?? [];
+      for (const [flag, value] of Object.entries(entry.flags ?? {})) {
+        const actual = options[flag];
+        const allowed = implied.includes(flag) ? [true, undefined] : [value];
+        if (!allowed.includes(actual)) {
+          return `the compiler option ${flag} is ${JSON.stringify(actual)} in ${entry.path}, ${JSON.stringify(value)} is required`;
+        }
+      }
+      return null;
+    }
+
+    case "yamlStructure": {
+      const result = checks.yamlStructure({ path: entry.path, require: entry.require ?? [] });
+      if (result.ok) return null;
+      return result.detail ?? result.reason;
+    }
+
+    case "criterion": {
+      const criterion = criteria.find((candidate) => candidate.id === entry.criterion);
+      if (!criterion) return `the criterion ${entry.criterion} does not exist`;
+      if (!criterion.check?.type) return `the criterion ${entry.criterion} holds no check`;
+      if (!checks[criterion.check.type]) {
+        return `the criterion ${entry.criterion} holds the unknown check type ${criterion.check.type}`;
+      }
+      return null;
+    }
+
+    case "command": {
+      const script = commandScript(entry.run);
+      if (script && script !== entry.path) {
+        return `the registry entry "${entry.match}" runs ${script}, the rule names ${entry.path}`;
+      }
+      if (isNoopCommand(entry.run)) {
+        return `the registry entry "${entry.match}" runs \`${entry.run}\`, which proves nothing`;
+      }
+      const result = run(entry.run);
+      if (result.code !== 0) return `the command \`${expand(entry.run)}\` exited ${result.code}`;
+      if (entry.contains && !result.output.includes(entry.contains)) {
+        return `the command \`${expand(entry.run)}\` did not print ${entry.contains}`;
+      }
+      return null;
+    }
+
+    case "fileShape": {
+      if (!existsSync(path.join(root, entry.path))) return `${entry.path} is missing`;
+      const content = readFileSync(path.join(root, entry.path), "utf8");
+      const bodyLines = content.trimEnd().split("\n").length;
+      const minimum = entry.minLines ?? 1;
+      if (bodyLines < minimum) {
+        return `${entry.path} holds ${bodyLines} lines, at least ${minimum} are required`;
+      }
+      for (const needle of entry.contains ?? []) {
+        if (!content.includes(needle)) return `${entry.path} does not name ${needle}`;
+      }
+      for (const pattern of entry.patterns ?? []) {
+        if (!new RegExp(pattern).test(content)) return `${entry.path} does not match ${pattern}`;
+      }
+      return null;
+    }
+
+    default:
+      return `the registry entry "${entry.match}" names an unknown kind: ${entry.kind}`;
+  }
 }
 
 const checks = {
@@ -594,8 +773,9 @@ const checks = {
   /**
    * Reads the rules of `AGENTS.md`. Every rule must name an enforcement path
    * that exists and that can fail. A document cannot fail, so a rule may not
-   * name one. The registry in the config names the mechanism of the rules that
-   * need one, and the check proves the mechanism is live.
+   * name one. The registry in the config names the mechanism of every rule,
+   * and the check proves the mechanism is live: no rule is validated by the
+   * existence of its path alone.
    */
   async agentsFile(check) {
     const settings = { ...config.agents, ...check };
@@ -618,7 +798,9 @@ const checks = {
 
     if (rules.length === 0) return { ok: false, reason: `${file} names no rules` };
 
+    const entries = settings.enforcement ?? [];
     const problems = [];
+
     for (const rule of rules) {
       const match = rule.match(/Enforced by: (\S+)$/);
       if (!match) {
@@ -632,43 +814,35 @@ const checks = {
       }
       if (!existsSync(path.join(root, target))) {
         problems.push(`${target} does not exist`);
+        continue;
       }
+
+      const matching = entries.filter((entry) => rule.includes(entry.match));
+      if (matching.length !== 1) {
+        problems.push(
+          `the rule "${rule}" is named by ${matching.length} registry entries, one is required`,
+        );
+        continue;
+      }
+
+      const entry = matching[0];
+      if (target !== entry.path) {
+        problems.push(
+          `the rule "${rule}" is enforced by ${target}, the registry names ${entry.path}`,
+        );
+        continue;
+      }
+
+      const reason = await validateEnforcement(entry);
+      if (reason) problems.push(reason);
     }
 
-    for (const entry of settings.enforcement ?? []) {
+    for (const entry of entries) {
       const matched = rules.filter((rule) => rule.includes(entry.match));
       if (matched.length !== 1) {
         problems.push(
           `the enforcement entry "${entry.match}" matches ${matched.length} rules of ${file}`,
         );
-        continue;
-      }
-
-      const target = matched[0].match(/Enforced by: (\S+)$/)?.[1];
-      if (target !== entry.path) {
-        problems.push(
-          `the rule "${entry.match}" is enforced by ${target}, the registry names ${entry.path}`,
-        );
-        continue;
-      }
-
-      if (entry.kind === "eslintRule") {
-        let resolved;
-        try {
-          resolved = await resolveEslintConfig(entry.file);
-        } catch (error) {
-          problems.push(`the ESLint configuration for ${entry.file} failed: ${error.message}`);
-          continue;
-        }
-        if (severityOf(resolved.rules?.[entry.rule]) !== 2) {
-          problems.push(`${entry.rule} is not an error rule for ${entry.file}`);
-        }
-      }
-
-      if (entry.kind === "criterion") {
-        if (!criteria.some((criterion) => criterion.id === entry.criterion)) {
-          problems.push(`the criterion ${entry.criterion} does not exist`);
-        }
       }
     }
 
@@ -716,6 +890,39 @@ if (only && selected.length === 0) {
   die(`no criterion is named ${only}`);
 }
 
+/**
+ * Checks that a criterion still is the criterion the harness holds. A
+ * criterion whose id the harness does not know, or whose command was replaced
+ * by something that proves nothing, fails before its check runs.
+ */
+function definitionProblems(criterion) {
+  const problems = [];
+  const id = criterion.id ?? criterion.check?.type ?? "criterion";
+  const expected = EXPECTED_CRITERIA[id];
+
+  if (!expected) {
+    problems.push(
+      `the criterion id ${id} is not one the harness holds: ${EXPECTED_CRITERION_IDS.join(", ")}`,
+    );
+    return problems;
+  }
+
+  const check = criterion.check ?? {};
+  if (check.type === "command") {
+    const command = String(check.run ?? "").trim();
+    if (command === "") {
+      problems.push(`${id} runs nothing`);
+    } else if (isNoopCommand(command)) {
+      problems.push(`${id} runs \`${command}\`, which exits 0 and proves nothing`);
+    }
+    if (expected.run !== undefined && expand(command) !== expand(expected.run)) {
+      problems.push(`${id} runs \`${command}\`, the harness expects \`${expand(expected.run)}\``);
+    }
+  }
+
+  return problems;
+}
+
 let passed = 0;
 let failed = 0;
 
@@ -723,6 +930,14 @@ for (const criterion of selected) {
   const check = criterion.check ?? {};
   const handler = checks[check.type];
   const label = criterion.id ?? check.type ?? "criterion";
+
+  const broken = definitionProblems(criterion);
+  if (broken.length > 0) {
+    console.log(`FAIL  ${label}  ${criterion.why ?? ""}`.trimEnd());
+    for (const problem of broken) console.log(`      ${problem}`);
+    failed += 1;
+    continue;
+  }
 
   if (!handler) {
     console.log(`FAIL  ${label}  unknown check type: ${check.type}`);
@@ -752,10 +967,34 @@ for (const criterion of selected) {
 }
 
 const minimum = config.minimumCriteria ?? 10;
-if (criteria.length < minimum) {
-  console.log(
-    `FAIL  coverage  the harness scores ${criteria.length} criteria, ${minimum} are required`,
+const ids = criteria.map((criterion) => criterion.id ?? criterion.check?.type ?? "criterion");
+const counts = new Map();
+for (const id of ids) counts.set(id, (counts.get(id) ?? 0) + 1);
+
+const missing = EXPECTED_CRITERION_IDS.filter((id) => !counts.has(id));
+const unexpected = ids.filter((id) => !EXPECTED_CRITERION_IDS.includes(id));
+const duplicated = [...counts.entries()].filter(([, count]) => count > 1).map(([id]) => id);
+
+const coverage = [];
+if (missing.length > 0) coverage.push(`the criteria ${missing.join(", ")} are missing`);
+if (unexpected.length > 0) {
+  coverage.push(`the criteria ${unexpected.join(", ")} are not one the harness holds`);
+}
+if (duplicated.length > 0) {
+  coverage.push(`the criteria ${duplicated.join(", ")} appear more than once`);
+}
+if (minimum !== EXPECTED_CRITERION_IDS.length) {
+  coverage.push(
+    `minimumCriteria is ${minimum}, the harness holds ${EXPECTED_CRITERION_IDS.length} criteria`,
   );
+}
+if (criteria.length < minimum) {
+  coverage.push(`the harness scores ${criteria.length} criteria, ${minimum} are required`);
+}
+
+if (coverage.length > 0) {
+  console.log(`FAIL  coverage  the harness scores the criteria it must hold`);
+  for (const problem of coverage) console.log(`      ${problem}`);
   failed += 1;
 } else {
   // The coverage check is a gate on the criteria list, not a criterion of its
