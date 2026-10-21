@@ -146,6 +146,7 @@ test("the settings survive a restart of the window", async ({ page }) => {
   // A reload is the browser build's restart: the store of the browser holds
   // the document the window wrote, exactly as the plugin store does on disk.
   await page.reload();
+  await expect(page.getByTestId("app-shell")).toBeVisible();
 
   await page.keyboard.press("Control+,");
   await expect(page.getByTestId("settings-font-size")).toHaveValue("21");
