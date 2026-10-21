@@ -149,6 +149,16 @@ test("Escape throws the ghost text away and ends the request", async ({ page }) 
   await expand(page, `${ROOT}/src`);
   await open(page, APP);
 
+  // The stub streams fast by default, so a request is often over before the
+  // case reaches the screen. A longer stream keeps the request open while the
+  // reader throws the suggestion away. The case asks for it without a guard:
+  // a stub that lost the knob fails the case instead of racing it.
+  await page.evaluate(() => {
+    const boundary = window.__arrowAi;
+    if (!boundary) throw new Error("the AI boundary is not in the page");
+    boundary.setTokenDelay(250);
+  });
+
   await typeAtTheEnd(page, "const tail = 1;");
 
   await expect(page.locator(".cm-ghost-text")).toBeVisible({ timeout: 15_000 });
