@@ -14,6 +14,20 @@ import { PLAIN_TEXT_LANGUAGE } from "./languages";
 
 export { Editor, type EditorProps } from "./Editor";
 export type { EditorView } from "@codemirror/view";
+export {
+  acceptGhostText,
+  aiCompletions,
+  clearGhostText,
+  createTriggerDebounce,
+  dismissGhostText,
+  ghostTextField,
+  GHOST_TEXT_DELAY_MS,
+  setGhostText,
+  type GhostTextOptions,
+  type GhostTextState,
+  type GhostTextTrigger,
+  type TriggerDebounce,
+} from "./extensions/ai-completions";
 export { baseExtensions } from "./extensions/base";
 export { arrowKeymap } from "./extensions/keymaps";
 export { selectionListener, type SelectionChange } from "./extensions/listeners";

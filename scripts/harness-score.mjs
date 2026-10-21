@@ -167,6 +167,7 @@ const EXPECTED_PROOF_NAMES = [
   "the error of the AI client keeps the key out of the tree",
   "the escape hatch criterion fails when the rules are switched off",
   "the extensions prop that is dropped after the mount is caught",
+  "the ghost text field that never paints the suggestion is caught",
   "the harness fails when a command criterion runs a no-op",
   "the harness fails when it takes longer than the ceiling",
   "the local gate criterion fails when the hook commands lose their run lines",

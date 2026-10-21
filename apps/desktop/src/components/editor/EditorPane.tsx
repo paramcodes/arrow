@@ -13,8 +13,10 @@ import { useAtomValue, useSetAtom } from "jotai";
 
 import { fileCursorAtom, type FileCursor } from "../../atoms/file";
 import { baseName } from "../../hooks/fileSystem";
+import { useAiStore } from "../../stores/ai";
 import { useEditorStore } from "../../stores/editor";
 import { useSettingsStore } from "../../stores/settings";
+import { useGhostText } from "./useGhostText";
 
 /**
  * The editor pane of one open file.
@@ -106,6 +108,18 @@ export function EditorPane({
   const minimap = useSettingsStore((state) => state.minimap);
   const reveal = useEditorStore((state) => (state.reveal?.path === key ? state.reveal : null));
 
+  const provider = useAiStore((state) => state.provider);
+  const model = useAiStore((state) => state.model);
+  const completionsEnabled = useAiStore((state) => state.completionsEnabled);
+
+  const ghostText = useGhostText({
+    viewRef: view,
+    active,
+    provider,
+    model,
+    enabled: completionsEnabled,
+  });
+
   const resolvedLanguage = useMemo(
     () => language ?? (path ? languageForPath(path) : "plaintext"),
     [language, path],
@@ -124,8 +138,9 @@ export function EditorPane({
       selectionListener(({ anchor, head }) =>
         setCursor((current: FileCursor) => ({ ...current, anchor, head })),
       ),
+      ghostText,
     ],
-    [fontFamily, fontSize, setCursor, tabSize, wordWrap],
+    [fontFamily, fontSize, ghostText, setCursor, tabSize, wordWrap],
   );
 
   useEffect(() => {
