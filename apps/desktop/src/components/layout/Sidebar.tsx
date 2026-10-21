@@ -32,11 +32,11 @@ export function Sidebar() {
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-canvas-soft" data-testid="sidebar">
-      <header className="flex h-8 shrink-0 items-center border-b border-border px-3 text-xs font-medium text-ink">
+      <header className="flex h-8 shrink-0 items-center border-b border-border px-2 text-xs font-medium text-ink">
         {TITLES[activePanel]}
       </header>
       <ScrollArea className="min-h-0 flex-1">
-        <p className="p-3 text-xs text-ink-tertiary">{NOTES[activePanel]}</p>
+        <p className="p-2 text-xs text-ink-tertiary">{NOTES[activePanel]}</p>
       </ScrollArea>
     </div>
   );

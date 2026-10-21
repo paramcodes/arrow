@@ -48,6 +48,15 @@ export interface LayoutState extends LayoutFacts {
 /** The facts the store keeps across a reload. */
 type PersistedLayout = LayoutFacts;
 
+/** The facts the layout holds when it opens. */
+const INITIAL_FACTS: LayoutFacts = {
+  sidebarOpen: true,
+  sidebarWidth: DEFAULT_SIDEBAR_WIDTH,
+  bottomPanelOpen: false,
+  bottomPanelHeight: DEFAULT_BOTTOM_PANEL_HEIGHT,
+  activePanel: "explorer",
+};
+
 /**
  * The memory of a browser that has no storage.
  *
@@ -106,11 +115,7 @@ function clamp(value: number, min: number, max: number): number {
 export const useLayoutStore = create<LayoutState>()(
   persist<LayoutState, [], [], PersistedLayout>(
     (set) => ({
-      sidebarOpen: true,
-      sidebarWidth: DEFAULT_SIDEBAR_WIDTH,
-      bottomPanelOpen: false,
-      bottomPanelHeight: DEFAULT_BOTTOM_PANEL_HEIGHT,
-      activePanel: "explorer",
+      ...INITIAL_FACTS,
       toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),
       toggleBottomPanel: () => set((state) => ({ bottomPanelOpen: !state.bottomPanelOpen })),
       setActivePanel: (panel) => set({ activePanel: panel }),
@@ -132,3 +137,18 @@ export const useLayoutStore = create<LayoutState>()(
     },
   ),
 );
+
+/**
+ * Puts the layout back the way a new window opens it.
+ *
+ * The store is one mutable object, so a test that changes it changes it for
+ * every test that runs after it. A test that only passes when another test
+ * left the store in a particular state is not a test, so every test of the
+ * store resets it first. The reset clears the persisted layout too, because a
+ * store that reads the layout of another test is the same mistake with a
+ * longer reach.
+ */
+export function resetLayoutStore(): void {
+  useLayoutStore.setState(INITIAL_FACTS);
+  storage.removeItem("arrow.layout");
+}

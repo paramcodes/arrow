@@ -1,18 +1,32 @@
-import { describe, expect, it } from "vitest";
+import { readFileSync, readdirSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { beforeEach, describe, expect, it } from "vitest";
 
 import {
   DEFAULT_BOTTOM_PANEL_HEIGHT,
   DEFAULT_SIDEBAR_WIDTH,
   MAX_SIDEBAR_WIDTH,
   MIN_SIDEBAR_WIDTH,
+  resetLayoutStore,
   useLayoutStore,
 } from "./layout";
+
+/** The directory the store tests live in. */
+const storesDirectory = fileURLToPath(new URL(".", import.meta.url));
 
 /**
  * The layout store holds the facts of the shell, so the shell behaves the
  * same way in the window and in a test.
+ *
+ * The store is one mutable object, so every test resets it before it runs. A
+ * test that only passes because another test left the store in a particular
+ * state is not a test: it fails the moment the order of the file changes.
  */
 describe("the layout store", () => {
+  beforeEach(() => {
+    resetLayoutStore();
+  });
+
   it("opens with a sidebar and a closed bottom panel", () => {
     const state = useLayoutStore.getState();
 
@@ -63,5 +77,28 @@ describe("the layout store", () => {
 
     expect(options.name).toBe("arrow.layout");
     expect(options.storage).toBeDefined();
+  });
+
+  it("leaves no state behind for the next test", () => {
+    useLayoutStore.getState().setSidebarWidth(300);
+    useLayoutStore.getState().toggleBottomPanel();
+
+    resetLayoutStore();
+
+    expect(useLayoutStore.getState().sidebarWidth).toBe(DEFAULT_SIDEBAR_WIDTH);
+    expect(useLayoutStore.getState().bottomPanelOpen).toBe(false);
+  });
+
+  it("resets the store before every test of the store", () => {
+    const files = readdirSync(storesDirectory).filter((name) => name.endsWith(".test.ts"));
+
+    expect(files.length).toBeGreaterThan(0);
+
+    for (const name of files) {
+      const source = readFileSync(`${storesDirectory}${name}`, "utf8");
+
+      expect(source, `${name} has no beforeEach hook`).toContain("beforeEach");
+      expect(source, `${name} does not reset the store`).toContain("resetLayoutStore(");
+    }
   });
 });

@@ -4,7 +4,7 @@
     "exec": "pnpm exec"
   },
   "minimumCriteria": 10,
-  "minimumProofs": 39,
+  "minimumProofs": 41,
   "agents": {
     "file": "AGENTS.md",
     "entryPoint": "CLAUDE.md",
@@ -877,6 +877,34 @@
         "run": "PROVE_LOCK_PATH=apps/desktop/.prove-lock.json PROVE_LOCK_WAIT_MS=0 node scripts/prove-guardrails.mjs",
         "exit": "nonzero",
         "contains": "another run holds the lock"
+      }
+    },
+    {
+      "name": "the store test that skips the reset is caught",
+      "write": [
+        {
+          "path": "apps/desktop/src/stores/__harness_probe.test.ts",
+          "content": "import { describe, expect, it } from \"vitest\";\n\nimport { useLayoutStore } from \"./layout\";\n\ndescribe(\"the harness probe\", () => {\n  it(\"changes the store and never resets it\", () => {\n    useLayoutStore.getState().setSidebarWidth(300);\n    expect(useLayoutStore.getState().sidebarWidth).toBe(300);\n  });\n});\n"
+        }
+      ],
+      "expect": {
+        "run": "${PM_EXEC} vitest run apps/desktop/src/stores/layout.test.ts",
+        "exit": "nonzero",
+        "contains": "has no beforeEach hook"
+      }
+    },
+    {
+      "name": "the shell content padding that leaves eight pixels is caught",
+      "write": [
+        {
+          "path": "apps/desktop/src/components/layout/__harness_probe.tsx",
+          "content": "export const harnessProbe = \"px-3\";\n"
+        }
+      ],
+      "expect": {
+        "run": "${PM_EXEC} vitest run apps/desktop/src/components/layout/density.test.ts",
+        "exit": "nonzero",
+        "contains": "uses a twelve pixel padding"
       }
     }
   ],

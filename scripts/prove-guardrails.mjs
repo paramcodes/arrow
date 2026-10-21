@@ -111,6 +111,8 @@ const EXPECTED_PROOF_NAMES = [
   "the tailwind build scans the shared ui package",
   "a file with no state tier owns a computed import",
   "the prover refuses a second run while the lock is held",
+  "the store test that skips the reset is caught",
+  "the shell content padding that leaves eight pixels is caught",
 ];
 
 if (!Number.isInteger(minimumProofs) || minimumProofs < 1) {

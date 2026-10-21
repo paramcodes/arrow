@@ -10,7 +10,7 @@ import { ScrollArea } from "@arrow/ui";
 export function BottomPanel() {
   return (
     <div className="flex h-full min-h-0 flex-col bg-canvas-soft" data-testid="bottom-panel">
-      <header className="flex h-7 shrink-0 items-center gap-4 border-b border-border px-3 text-[11px] text-ink-secondary">
+      <header className="flex h-7 shrink-0 items-center gap-4 border-b border-border px-2 text-[11px] text-ink-secondary">
         <span className="text-ink">Terminal</span>
       </header>
       <ScrollArea className="min-h-0 flex-1">
