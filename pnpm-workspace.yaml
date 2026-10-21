@@ -6,3 +6,6 @@ allowBuilds:
   "@biomejs/biome": true
   esbuild: true
   lefthook: true
+
+minimumReleaseAgeExclude:
+  - lucide-react@1.60.0
