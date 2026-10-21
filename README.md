@@ -86,13 +86,13 @@ cargo build --manifest-path apps/desktop/src-tauri/Cargo.toml
 
 Five commands check the repository. CI runs all of them on every pull request.
 
-| Command              | What it proves                                                                                                                                                             |
-| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pnpm verify`        | The format check, the lint, the typecheck, the unit tests and the build all pass.                                                                                            |
-| `pnpm test:e2e`      | The app boots in a plain browser with no Tauri host, and the editor, the tree, the terminal, the palette and the AI feature work when Playwright drives them.            |
+| Command              | What it proves                                                                                                                                                                           |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm verify`        | The format check, the lint, the typecheck, the unit tests and the build all pass.                                                                                                        |
+| `pnpm test:e2e`      | The app boots in a plain browser with no Tauri host, and the editor, the tree, the terminal, the palette and the AI feature work when Playwright drives them.                            |
 | `pnpm harness`       | The repository holds every criterion of `harness.config.json`. A criterion runs a real check against the tree, so a rule that kept its words while losing its behaviour fails the score. |
-| `pnpm prove`         | Every guardrail catches the mistake it was made for. The prover writes the bad code on purpose and fails when a guardrail misses it.                                          |
-| `pnpm prove-harness` | The harness can fail. The script copies the harness into a scratch tree, breaks the copy seven ways, and fails when the scorer passes on any of them.                          |
+| `pnpm prove`         | Every guardrail catches the mistake it was made for. The prover writes the bad code on purpose and fails when a guardrail misses it.                                                     |
+| `pnpm prove-harness` | The harness can fail. The script copies the harness into a scratch tree, breaks the copy seven ways, and fails when the scorer passes on any of them.                                    |
 
 A test runner checks that the code does what it should. The harness scores a set of criteria
 instead, and each criterion runs a check against the repository rather than against a function. The
@@ -102,15 +102,15 @@ harness seven ways and shows that the scorer fails on every one of them.
 
 ## How the code is laid out
 
-| Path                     | What it owns                                                                                                                             |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| Path                     | What it owns                                                                                                                                                 |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `apps/desktop/src-tauri` | The Rust shell. The file system, the terminal, git, the watcher and the AI client. It holds the key of the provider in the keychain of the operating system. |
-| `apps/desktop/src`       | The React tree of the desktop shell. It owns the screen and every call to the shell.                                                      |
-| `packages/editor-core`   | The editor engine, on CodeMirror 6. It owns the documents.                                                                                |
-| `packages/ui`            | The shared UI primitives. They read theme tokens and never Tauri.                                                                        |
-| `packages/theme`         | The dark-first design tokens every layer reads.                                                                                           |
-| `packages/types`         | The shared type contracts.                                                                                                               |
-| `scripts`                | The gates: the scorer, the prover, the self proof, the theme check and the branch guard.                                                  |
+| `apps/desktop/src`       | The React tree of the desktop shell. It owns the screen and every call to the shell.                                                                         |
+| `packages/editor-core`   | The editor engine, on CodeMirror 6. It owns the documents.                                                                                                   |
+| `packages/ui`            | The shared UI primitives. They read theme tokens and never Tauri.                                                                                            |
+| `packages/theme`         | The dark-first design tokens every layer reads.                                                                                                              |
+| `packages/types`         | The shared type contracts.                                                                                                                                   |
+| `scripts`                | The gates: the scorer, the prover, the self proof, the theme check and the branch guard.                                                                     |
 
 Four boundaries hold the tree together, and each one names the path that fails when it breaks.
 
