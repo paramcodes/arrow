@@ -114,6 +114,10 @@ const EXPECTED_PROOF_NAMES = [
   "the store test that skips the reset is caught",
   "the shell content padding that leaves eight pixels is caught",
   "the ci criterion fails when the workflow stops running the end to end suite",
+  "the ci criterion fails when the verify step only echoes the command",
+  "the ci criterion fails when the verify step swallows the failure",
+  "the ci criterion fails when the verify step is commented out",
+  "the local gate criterion fails when the lint command is only a comment",
 ];
 
 if (!Number.isInteger(minimumProofs) || minimumProofs < 1) {
