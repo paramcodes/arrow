@@ -131,11 +131,15 @@ mod tests {
 
         write_session(&manager, &id, "echo arrow-ok\n").expect("the command is written");
 
+        // The PTY echoes the typed line and the prompt redraws it, so the word
+        // alone proves nothing. An answer starts its own line.
         assert!(
-            recorder.wait_for_text(&id, "arrow-ok"),
+            recorder.wait_for_text(&id, "\rarrow-ok"),
             "the shell answered: {:?}",
             recorder.text(&id)
         );
+        // The transcript of the run shows what the frontend received.
+        println!("pty:data:{id} decoded -> {:?}", recorder.text(&id));
         kill_session(&manager, &id).expect("the session is killed");
     }
 

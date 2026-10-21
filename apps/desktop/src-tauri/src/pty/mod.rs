@@ -205,6 +205,7 @@ pub(crate) mod testing {
             wait_until(Duration::from_secs(15), || self.text(id).contains(needle))
         }
 
+
         /// Wait until a session reported its exit.
         pub fn wait_for_exit(&self, id: &str) -> Option<ExitPayload> {
             wait_until(Duration::from_secs(15), || !self.exits(id).is_empty());
@@ -263,11 +264,17 @@ mod tests {
         assert!(manager.alive(&id), "the session is in the manager");
         assert!(manager.write(&id, "echo arrow-ok\n").is_ok());
 
+        // The PTY echoes the typed line and the prompt redraws it, so the word
+        // alone proves nothing. An answer starts its own line.
         assert!(
-            recorder.wait_for_text(&id, "arrow-ok"),
+            wait_until(Duration::from_secs(15), || {
+                let text = recorder.text(&id);
+                text.contains("\rarrow-ok") || text.contains("\narrow-ok")
+            }),
             "the shell answered: {:?}",
             recorder.text(&id)
         );
+        println!("pty:data:{id} decoded -> {:?}", recorder.text(&id));
 
         manager.kill(&id).expect("the session is killed");
     }
