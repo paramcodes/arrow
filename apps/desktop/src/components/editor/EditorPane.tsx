@@ -16,7 +16,10 @@ import { baseName } from "../../hooks/fileSystem";
 import { useAiStore } from "../../stores/ai";
 import { useEditorStore } from "../../stores/editor";
 import { useSettingsStore } from "../../stores/settings";
+import { setActiveEditor } from "./activeEditor";
+import { InlineEditBar } from "./InlineEditBar";
 import { useGhostText } from "./useGhostText";
+import { useInlineEdit } from "./useInlineEdit";
 
 /**
  * The editor pane of one open file.
@@ -125,6 +128,13 @@ export function EditorPane({
     enabled: completionsEnabled,
   });
 
+  const { extension: inlineEdit, ...inlineEditBar } = useInlineEdit({
+    viewRef: view,
+    active,
+    provider,
+    model,
+  });
+
   const resolvedLanguage = useMemo(
     () => language ?? (path ? languageForPath(path) : "plaintext"),
     [language, path],
@@ -143,9 +153,12 @@ export function EditorPane({
       selectionListener(({ anchor, head }) =>
         setCursor((current: FileCursor) => ({ ...current, anchor, head })),
       ),
+      // The inline diff comes before the ghost text, because the escape of
+      // the reader reaches the diff before it reaches the suggestion.
+      inlineEdit,
       ghostText,
     ],
-    [fontFamily, fontSize, ghostText, setCursor, tabSize, wordWrap],
+    [fontFamily, fontSize, ghostText, inlineEdit, setCursor, tabSize, wordWrap],
   );
 
   useEffect(() => {
@@ -184,6 +197,24 @@ export function EditorPane({
 
   useEffect(() => {
     if (!active) return;
+    const instance = view.current;
+    if (!instance) return;
+
+    setActiveEditor({
+      view: instance,
+      inlineEdit: {
+        start: inlineEditBar.start,
+        accept: inlineEditBar.accept,
+        reject: inlineEditBar.reject,
+      },
+    });
+    return () => {
+      setActiveEditor(null);
+    };
+  }, [active, key, inlineEditBar.accept, inlineEditBar.reject, inlineEditBar.start]);
+
+  useEffect(() => {
+    if (!active) return;
     window.__arrowEditorCaret = () => {
       const instance = view.current;
       if (!instance) return null;
@@ -215,6 +246,16 @@ export function EditorPane({
         />
         {minimap ? <Minimap content={content} /> : null}
       </div>
+
+      <InlineEditBar
+        error={inlineEditBar.error}
+        onAccept={inlineEditBar.accept}
+        onCancel={inlineEditBar.cancel}
+        onReject={inlineEditBar.reject}
+        onSubmit={inlineEditBar.submit}
+        position={inlineEditBar.position}
+        status={inlineEditBar.status}
+      />
     </div>
   );
 }
