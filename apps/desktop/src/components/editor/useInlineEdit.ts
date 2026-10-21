@@ -189,10 +189,11 @@ export function useInlineEdit({
     (view: EditorView): boolean => {
       if (actor.getSnapshot().value !== "reviewing") return false;
 
+      // The edit may be gone already, when the text it applies to changed
+      // under it. The workflow ends either way: a reader who answers a
+      // question that is gone must not stay in it.
       const spec = acceptInlineDiff(view.state);
-      if (!spec) return false;
-
-      view.dispatch(spec);
+      if (spec) view.dispatch(spec);
       endRequest();
       actor.send({ type: "ACCEPT" });
       return true;
@@ -207,8 +208,7 @@ export function useInlineEdit({
 
       if (state === "reviewing") {
         const spec = rejectInlineDiff(view.state);
-        if (!spec) return false;
-        view.dispatch(spec);
+        if (spec) view.dispatch(spec);
         endRequest();
         actor.send({ type: "REJECT" });
         return true;
@@ -225,6 +225,20 @@ export function useInlineEdit({
     },
     [actor, clearDiff, endRequest],
   );
+
+  /**
+   * The text the edit applies to changed, so the edit left the screen.
+   *
+   * The edit belongs to the text it applies to, so a change of that text
+   * takes the edit away. The workflow ends with it, so the bar of the prompt
+   * does not wait for an answer that has no question any more.
+   */
+  const lost = useCallback(() => {
+    const state = actor.getSnapshot().value;
+    if (state !== "streaming" && state !== "reviewing") return;
+    endRequest();
+    actor.send({ type: "CANCEL" });
+  }, [actor, endRequest]);
 
   /** The reader sent the instruction, so the request goes out. */
   const submit = useCallback(
@@ -293,8 +307,8 @@ export function useInlineEdit({
   }, [status, viewRef]);
 
   const extension = useMemo(
-    () => inlineDiff({ onAccept: acceptIn, onReject: rejectIn }),
-    [acceptIn, rejectIn],
+    () => inlineDiff({ onAccept: acceptIn, onReject: rejectIn, onLost: lost }),
+    [acceptIn, rejectIn, lost],
   );
 
   return {

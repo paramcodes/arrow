@@ -289,13 +289,23 @@ export interface InlineDiffOptions {
    * key only when the edit was really on the screen.
    */
   readonly onReject?: (view: EditorView) => boolean;
+  /**
+   * Called when the document changed and the edit left the screen with it.
+   *
+   * The edit belongs to the text it applies to, so a change of that text takes
+   * the edit away. The call tells the caller that the question is gone, so the
+   * workflow that waits for the reader ends instead of waiting for an answer
+   * that no longer has a question.
+   */
+  readonly onLost?: (view: EditorView) => void;
 }
 
 /**
  * The extension that holds the inline diff.
  *
- * The extension carries three things: the field that holds the edit, the style
- * that paints it, and the two bindings that act on the edit.
+ * The extension carries four things: the field that holds the edit, the style
+ * that paints it, the report of the loss of the edit and the two bindings that
+ * act on the edit.
  *
  * The bindings run at the highest precedence, so they win over the bindings of
  * the defaults. The extension is mounted before the ghost text, so the escape
@@ -305,6 +315,19 @@ export function inlineDiff(options: InlineDiffOptions = {}): Extension {
   return [
     inlineDiffField,
     inlineDiffTheme,
+    // The engine reports the loss of the edit, so the workflow that waits for
+    // the reader learns that the question is gone.
+    EditorView.updateListener.of((update) => {
+      const lost = update.transactions.some(
+        (transaction) =>
+          (transaction.docChanged || transaction.selection) &&
+          !transaction.effects.some((effect) => effect.is(clearInlineDiff)),
+      );
+      if (!lost) return;
+      const before = update.startState.field(inlineDiffField, false)?.diff;
+      if (!before) return;
+      options.onLost?.(update.view);
+    }),
     Prec.highest(
       keymap.of([
         { key: "Mod-Enter", run: (view) => options.onAccept?.(view) === true },

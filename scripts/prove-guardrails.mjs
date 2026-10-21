@@ -121,6 +121,7 @@ const EXPECTED_PROOF_NAMES = [
   "the harness fails when a command criterion runs a no-op",
   "the harness fails when it takes longer than the ceiling",
   "the inline diff that never paints the decorations is caught",
+  "the inline edit that waits for an answer to a question that is gone is caught",
   "the local gate criterion fails when the hook commands lose their run lines",
   "the local gate criterion fails when the lint command is only a comment",
   "the mistake log criterion fails when the rows are deleted",

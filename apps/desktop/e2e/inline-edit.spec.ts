@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
+import type { AiDebug } from "../src/lib/ai";
 import { openApp } from "./support/app";
 
 /**
@@ -11,6 +12,13 @@ import { openApp } from "./support/app";
  * way a reader reads it: the prompt above the selection, the diff in the
  * document, the two answers of the reader and the settings of the feature.
  */
+
+declare global {
+  interface Window {
+    /** The handle of the AI boundary, for the end to end suite. */
+    __arrowAi?: AiDebug;
+  }
+}
 
 const ROOT = "/workspace";
 const APP = `${ROOT}/src/app.ts`;
@@ -197,4 +205,24 @@ test("the key of the provider reaches the store of the window", async ({ page })
   expect(JSON.stringify(stored), "the key never reaches the log of the calls").not.toContain(
     "the-key-a-reader-typed",
   );
+});
+
+test("the reader who moves the caret loses the proposal and the bar closes", async ({ page }) => {
+  await openApp(page);
+  await expand(page, `${ROOT}/src`);
+  await open(page, APP);
+
+  await askForAChange(page);
+
+  await expect(page.locator(".cm-inline-diff-removed")).toBeVisible({ timeout: 15_000 });
+  await page.keyboard.press("ArrowDown");
+
+  await expect(
+    page.locator(".cm-inline-diff-removed"),
+    "the edit belongs to the text it applies to",
+  ).toHaveCount(0);
+  await expect(
+    page.getByTestId("inline-edit-bar"),
+    "the bar closes with the proposal, so no dead answer is left on the screen",
+  ).toHaveCount(0);
 });
