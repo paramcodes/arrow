@@ -4,6 +4,7 @@ import {
   useContext,
   useRef,
   type PointerEvent as ReactPointerEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
 } from "react";
 
@@ -26,6 +27,17 @@ export const panelSpring = {
 } as const;
 
 const OrientationContext = createContext<ResizableOrientation>("horizontal");
+
+/**
+ * The number of pixels one arrow key press moves a handle.
+ *
+ * The step is the size of one text line, so the panel follows the keyboard at
+ * the speed a reader expects. Holding shift moves it four times as far.
+ */
+export const HANDLE_KEY_STEP = 16;
+
+/** The number of pixels one shift and arrow key press moves a handle. */
+export const HANDLE_KEY_STEP_LARGE = 64;
 
 /** The props of a group of panels. */
 export interface ResizablePanelGroupProps {
@@ -145,11 +157,38 @@ export function ResizableHandle({
     event.currentTarget.releasePointerCapture(event.pointerId);
   };
 
+  /**
+   * The keyboard resize.
+   *
+   * A handle that a keyboard can reach has to move under the keyboard too,
+   * or the reach is a trap. The arrow keys move the panel along the axis of
+   * the group, and the same bounds hold as for a drag.
+   */
+  const onKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    const step = event.shiftKey ? HANDLE_KEY_STEP_LARGE : HANDLE_KEY_STEP;
+    let delta = 0;
+
+    if (orientation === "horizontal") {
+      if (event.key === "ArrowLeft") delta = -step;
+      else if (event.key === "ArrowRight") delta = step;
+    } else {
+      if (event.key === "ArrowUp") delta = -step;
+      else if (event.key === "ArrowDown") delta = step;
+    }
+
+    if (delta === 0) return;
+    event.preventDefault();
+    onResize(Math.min(Math.max(size + delta, min), max));
+  };
+
   return (
     <div
       role="separator"
       aria-label={label}
       aria-orientation={orientation === "horizontal" ? "vertical" : "horizontal"}
+      aria-valuenow={size}
+      aria-valuemin={min}
+      aria-valuemax={Number.isFinite(max) ? max : undefined}
       tabIndex={0}
       data-testid={testId}
       className={cn(
@@ -160,6 +199,7 @@ export function ResizableHandle({
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
+      onKeyDown={onKeyDown}
     />
   );
 }

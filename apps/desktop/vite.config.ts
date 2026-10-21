@@ -39,7 +39,14 @@ const alias = [
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   clearScreen: false,
-  alias,
+  /**
+   * The alias lives under `resolve`, because that is where Vite reads it. A
+   * top level `alias` key is not a Vite option and is ignored, which sent
+   * the app to the built output of the packages instead of their source.
+   */
+  resolve: {
+    alias,
+  },
   server: {
     port: 1420,
     strictPort: true,

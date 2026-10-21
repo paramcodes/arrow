@@ -4,7 +4,7 @@
     "exec": "pnpm exec"
   },
   "minimumCriteria": 10,
-  "minimumProofs": 36,
+  "minimumProofs": 39,
   "agents": {
     "file": "AGENTS.md",
     "entryPoint": "CLAUDE.md",
@@ -96,13 +96,22 @@
         "path": "lefthook.yml",
         "kind": "yamlStructure",
         "require": [
-          { "path": "pre-commit.commands.branch.run", "contains": ["guard-branch.sh"] },
+          {
+            "path": "pre-commit.commands.branch.run",
+            "contains": ["guard-branch.sh"]
+          },
           {
             "path": "pre-commit.commands.format-check.run",
             "contains": ["biome format", "{staged_files}"]
           },
-          { "path": "pre-commit.commands.lint.run", "contains": ["eslint", "{staged_files}"] },
-          { "path": "pre-commit.commands.typecheck.run", "contains": ["pnpm typecheck"] }
+          {
+            "path": "pre-commit.commands.lint.run",
+            "contains": ["eslint", "{staged_files}"]
+          },
+          {
+            "path": "pre-commit.commands.typecheck.run",
+            "contains": ["pnpm typecheck"]
+          }
         ]
       },
       {
@@ -110,10 +119,26 @@
         "path": ".github/workflows/ci.yml",
         "kind": "yamlStructure",
         "require": [
-          { "path": "jobs.verify.steps", "key": "run", "contains": ["pnpm verify"] },
-          { "path": "jobs.verify.steps", "key": "run", "contains": ["pnpm prove"] },
-          { "path": "jobs.verify.steps", "key": "run", "contains": ["pnpm harness"] },
-          { "path": "jobs.rust.steps", "key": "run", "contains": ["cargo test"] }
+          {
+            "path": "jobs.verify.steps",
+            "key": "run",
+            "contains": ["pnpm verify"]
+          },
+          {
+            "path": "jobs.verify.steps",
+            "key": "run",
+            "contains": ["pnpm prove"]
+          },
+          {
+            "path": "jobs.verify.steps",
+            "key": "run",
+            "contains": ["pnpm harness"]
+          },
+          {
+            "path": "jobs.rust.steps",
+            "key": "run",
+            "contains": ["cargo test"]
+          }
         ]
       },
       {
@@ -143,7 +168,10 @@
     {
       "id": "boundaries",
       "why": "the layers that must not reach across a boundary cannot",
-      "check": { "type": "command", "run": "${PM} arch" }
+      "check": {
+        "type": "command",
+        "run": "${PM} arch"
+      }
     },
     {
       "id": "theme-discipline",
@@ -157,7 +185,11 @@
     {
       "id": "proofs",
       "why": "every guardrail catches the mistake it was made for",
-      "check": { "type": "command", "run": "${PM} prove", "contains": ", 0 missed" }
+      "check": {
+        "type": "command",
+        "run": "${PM} prove",
+        "contains": ", 0 missed"
+      }
     },
     {
       "id": "escape-hatches",
@@ -191,7 +223,9 @@
     {
       "id": "entry-point",
       "why": "every rule in AGENTS.md names an enforcement path that can fail, and that path is live",
-      "check": { "type": "agentsFile" }
+      "check": {
+        "type": "agentsFile"
+      }
     },
     {
       "id": "local-gate",
@@ -200,13 +234,22 @@
         "type": "yamlStructure",
         "path": "lefthook.yml",
         "require": [
-          { "path": "pre-commit.commands.branch.run", "contains": ["guard-branch.sh"] },
+          {
+            "path": "pre-commit.commands.branch.run",
+            "contains": ["guard-branch.sh"]
+          },
           {
             "path": "pre-commit.commands.format-check.run",
             "contains": ["biome format", "{staged_files}"]
           },
-          { "path": "pre-commit.commands.lint.run", "contains": ["eslint", "{staged_files}"] },
-          { "path": "pre-commit.commands.typecheck.run", "contains": ["pnpm typecheck"] }
+          {
+            "path": "pre-commit.commands.lint.run",
+            "contains": ["eslint", "{staged_files}"]
+          },
+          {
+            "path": "pre-commit.commands.typecheck.run",
+            "contains": ["pnpm typecheck"]
+          }
         ]
       }
     },
@@ -217,10 +260,26 @@
         "type": "yamlStructure",
         "path": ".github/workflows/ci.yml",
         "require": [
-          { "path": "jobs.verify.steps", "key": "run", "contains": ["pnpm verify"] },
-          { "path": "jobs.verify.steps", "key": "run", "contains": ["pnpm prove"] },
-          { "path": "jobs.verify.steps", "key": "run", "contains": ["pnpm harness"] },
-          { "path": "jobs.rust.steps", "key": "run", "contains": ["cargo test"] },
+          {
+            "path": "jobs.verify.steps",
+            "key": "run",
+            "contains": ["pnpm verify"]
+          },
+          {
+            "path": "jobs.verify.steps",
+            "key": "run",
+            "contains": ["pnpm prove"]
+          },
+          {
+            "path": "jobs.verify.steps",
+            "key": "run",
+            "contains": ["pnpm harness"]
+          },
+          {
+            "path": "jobs.rust.steps",
+            "key": "run",
+            "contains": ["cargo test"]
+          },
           {
             "path": "jobs.rust.steps",
             "key": "run",
@@ -269,7 +328,10 @@
     {
       "id": "verify",
       "why": "the repository is green on the commands a contributor runs",
-      "check": { "type": "command", "run": "${PM} verify" }
+      "check": {
+        "type": "command",
+        "run": "${PM} verify"
+      }
     }
   ],
   "proofs": [
@@ -753,7 +815,7 @@
       "write": [
         {
           "path": "harness.config.mutation.json",
-          "content": "{\"packageManager\":\"pnpm\",\"minimumProofs\":36,\"proofs\":[{\"name\":\"a component hardcodes a color\",\"write\":[],\"expect\":{\"run\":\"true\",\"exit\":\"zero\"}},{\"name\":\"a component hardcodes a color\",\"write\":[],\"expect\":{\"run\":\"true\",\"exit\":\"zero\"}}]}\n"
+          "content": "{\"packageManager\":\"pnpm\",\"minimumProofs\":39,\"proofs\":[{\"name\":\"a component hardcodes a color\",\"write\":[],\"expect\":{\"run\":\"true\",\"exit\":\"zero\"}},{\"name\":\"a component hardcodes a color\",\"write\":[],\"expect\":{\"run\":\"true\",\"exit\":\"zero\"}}]}\n"
         }
       ],
       "expect": {
@@ -774,6 +836,47 @@
         "run": "HARNESS_CONFIG=harness.config.mutation.json node scripts/harness-score.mjs --only boundaries",
         "exit": "nonzero",
         "contains": "proves nothing"
+      }
+    },
+    {
+      "name": "the tailwind build scans the shared ui package",
+      "write": [
+        {
+          "path": "packages/ui/src/__harness_probe.tsx",
+          "content": "export const harnessProbe = \"w-11\";\n"
+        }
+      ],
+      "expect": {
+        "run": "pnpm --filter @arrow/desktop build && grep -F -o '.w-11{' apps/desktop/dist/assets/*.css",
+        "exit": "zero",
+        "contains": ".w-11{"
+      }
+    },
+    {
+      "name": "a file with no state tier owns a computed import",
+      "write": [
+        {
+          "path": "apps/desktop/src/__harness_probe.ts",
+          "content": "export async function probe(target: string): Promise<unknown> {\n  const module = await import(target);\n  return module;\n}\n"
+        }
+      ],
+      "expect": {
+        "run": "${PM_EXEC} eslint ${PROBE} --max-warnings=0",
+        "exit": "zero"
+      }
+    },
+    {
+      "name": "the prover refuses a second run while the lock is held",
+      "write": [
+        {
+          "path": "apps/desktop/.prove-lock.json",
+          "content": "{\"pid\":1,\"startedAt\":0}\n"
+        }
+      ],
+      "expect": {
+        "run": "PROVE_LOCK_PATH=apps/desktop/.prove-lock.json PROVE_LOCK_WAIT_MS=0 node scripts/prove-guardrails.mjs",
+        "exit": "nonzero",
+        "contains": "another run holds the lock"
       }
     }
   ],

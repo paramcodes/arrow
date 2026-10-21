@@ -12,21 +12,41 @@
  * prove that a guardrail still holds, for example that a workspace alias
  * resolves to a real entry point.
  *
+ * Only one run may own a tree at a time. The run takes an exclusive lock
+ * before it touches the tree, so two overlapping runs cannot fight over the
+ * same probe files, and the run that waits never leaves a probe behind.
+ *
  * The script never passes while proving nothing. The proof set must hold the
  * exact cases the harness holds, a case that is deleted, renamed or duplicated
  * fails the run, and `minimumProofs` must match that set. The set lives in
  * this file and the floor lives in `harness.config.json`, so the scorer and
  * the prover can never disagree about it and editing the config alone cannot
  * weaken the gate.
+ *
+ * The tree of the run is the tree that owns this script, not the directory the
+ * command was started from. A run started from the wrong directory would
+ * otherwise write its probe files into another checkout.
  */
 
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  closeSync,
+  existsSync,
+  mkdirSync,
+  openSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
-const root = path.resolve(process.argv[2] ?? process.cwd());
+const scriptRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const root = path.resolve(process.argv[2] ?? scriptRoot);
 process.chdir(root);
 
 const configPath = process.env.HARNESS_CONFIG ?? "harness.config.json";
@@ -88,6 +108,9 @@ const EXPECTED_PROOF_NAMES = [
   "the coverage criterion fails when a criterion is deleted and another is duplicated",
   "the prover fails when a proof case is deleted and another is duplicated",
   "the harness fails when a command criterion runs a no-op",
+  "the tailwind build scans the shared ui package",
+  "a file with no state tier owns a computed import",
+  "the prover refuses a second run while the lock is held",
 ];
 
 if (!Number.isInteger(minimumProofs) || minimumProofs < 1) {
@@ -189,12 +212,138 @@ const journalPath = path.join(
   `arrow-prove-journal-${createHash("sha256").update(root).digest("hex").slice(0, 12)}.json`,
 );
 
+/**
+ * The lock of the run.
+ *
+ * Two runs of the prover on one tree fight over the same probe files and the
+ * same journal, and the loser leaves a probe behind in the tree, which then
+ * fails the format check. The lock makes the tree the resource of one run:
+ * the second run waits for the first to finish and refuses when the wait
+ * runs out.
+ *
+ * The lock lives outside the tree, so a run that was killed outright cannot
+ * leave it in the repository. A lock whose owner is gone is broken, so a
+ * killed run never blocks the next one.
+ *
+ * The path may be set with `PROVE_LOCK_PATH`, so a proof case can hold the
+ * lock of a tree on purpose. A run uses one lock per tree.
+ */
+const lockPath = resolveLockPath();
+
+function resolveLockPath() {
+  const override = process.env.PROVE_LOCK_PATH;
+  if (!override) {
+    return path.join(
+      os.tmpdir(),
+      `arrow-prove-lock-${createHash("sha256").update(root).digest("hex").slice(0, 12)}.lock`,
+    );
+  }
+  return path.isAbsolute(override) ? override : path.join(root, override);
+}
+
+/** The milliseconds a run waits for the lock before it refuses to run. */
+const lockWaitMs = Number(process.env.PROVE_LOCK_WAIT_MS ?? 120_000);
+
+/** The milliseconds after which a lock without a readable owner is stale. */
+const lockStaleMs = Number(process.env.PROVE_LOCK_STALE_MS ?? 60_000);
+
+/** Sleeps without blocking the event loop for longer than it has to. */
+function sleep(ms) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+/**
+ * True when the lock belongs to a process that is gone.
+ *
+ * A run that was killed outright leaves its lock behind. The lock of a live
+ * process is never broken, and a lock that cannot be read is only broken
+ * when it is older than every run can take.
+ */
+function lockOwnerIsGone() {
+  let holder;
+  try {
+    holder = JSON.parse(readFileSync(lockPath, "utf8"));
+  } catch {
+    try {
+      return Date.now() - statSync(lockPath).mtimeMs > lockStaleMs;
+    } catch {
+      return true;
+    }
+  }
+
+  if (typeof holder?.pid !== "number") return false;
+  try {
+    process.kill(holder.pid, 0);
+    return false;
+  } catch (error) {
+    return error.code === "ESRCH";
+  }
+}
+
+/**
+ * Takes the lock of the tree.
+ *
+ * The lock is created with the exclusive flag, so exactly one run can hold
+ * it. A second run waits for the first to finish. A lock whose owner is gone
+ * is broken by renaming it, which only one run can win, so two runs can never
+ * break the same lock and enter the tree together.
+ */
+function acquireLock() {
+  const deadline = Date.now() + lockWaitMs;
+
+  for (;;) {
+    try {
+      const handle = openSync(lockPath, "wx");
+      try {
+        writeFileSync(handle, JSON.stringify({ pid: process.pid, startedAt: Date.now() }));
+      } finally {
+        closeSync(handle);
+      }
+      return true;
+    } catch (error) {
+      if (error.code !== "EEXIST") throw error;
+    }
+
+    if (lockOwnerIsGone()) {
+      const stalePath = `${lockPath}.stale-${process.pid}-${Date.now()}`;
+      try {
+        renameSync(lockPath, stalePath);
+        rmSync(stalePath, { force: true });
+      } catch {
+        // Another run broke the same lock first. It holds it now.
+      }
+      continue;
+    }
+
+    if (Date.now() >= deadline) return false;
+    sleep(250);
+  }
+}
+
+/**
+ * Releases the lock of the run.
+ *
+ * Only the owner releases the lock, so a run that lost the lock to a broken
+ * stale lock never removes the lock of the run that holds it now.
+ */
+function releaseLock() {
+  try {
+    const holder = JSON.parse(readFileSync(lockPath, "utf8"));
+    if (holder?.pid !== process.pid) return;
+  } catch {
+    return;
+  }
+  rmSync(lockPath, { force: true });
+}
+
 let pendingFiles = [];
 let pendingDirectories = new Set();
+let journalWritten = false;
 
 function writeJournal() {
   try {
     writeFileSync(journalPath, JSON.stringify({ root, pendingFiles }, null, 2));
+    journalWritten = true;
   } catch {
     // The journal is a backup for a run that cannot clean up after itself. A
     // failure to write it must not stop the run.
@@ -221,6 +370,10 @@ function restoreTree() {
   }
   pendingDirectories.clear();
 
+  // The journal belongs to the run that wrote it. A run that never wrote one
+  // must not remove the journal of the run that holds the tree.
+  if (!journalWritten) return;
+  journalWritten = false;
   rmSync(journalPath, { force: true });
 }
 
@@ -256,8 +409,22 @@ function onSignal(signal) {
     runningChild = null;
   }
   restoreTree();
+  releaseLock();
   console.error(`\nprove: ${signal} received, the tree was restored`);
   process.exit(128 + (os.constants.signals[signal] ?? 0));
+}
+
+/**
+ * The run owns the tree before it touches it.
+ *
+ * The lock is taken before the stale probes are repaired, so two runs can
+ * never repair the same probe at the same time.
+ */
+if (!acquireLock()) {
+  console.error(
+    `prove: another run holds the lock of this tree and did not finish within ${lockWaitMs} ms`,
+  );
+  process.exit(1);
 }
 
 recoverStaleProbes();
@@ -266,16 +433,21 @@ for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) {
   process.on(signal, () => onSignal(signal));
 }
 
-process.on("exit", restoreTree);
+process.on("exit", () => {
+  restoreTree();
+  releaseLock();
+});
 
 process.on("uncaughtException", (error) => {
   restoreTree();
+  releaseLock();
   console.error(error);
   process.exit(1);
 });
 
 process.on("unhandledRejection", (error) => {
   restoreTree();
+  releaseLock();
   console.error(error);
   process.exit(1);
 });

@@ -412,6 +412,7 @@ const noCrossTierStore = {
   },
   create(context) {
     const owned = new Set();
+    const unknown = [];
 
     function check(node, source) {
       if (typeof source !== "string") return;
@@ -433,11 +434,30 @@ const noCrossTierStore = {
 
     /**
      * The source of an import that cannot be resolved. The tier of such an
-     * import is unknown, and an unknown tier cannot be checked, so the rule
-     * refuses it instead of letting it through.
+     * import is unknown, so the rule holds it until the file has been read
+     * to the end.
      */
     function checkUnknown(node) {
-      context.report({ node, messageId: "crossTierUnknown" });
+      unknown.push(node);
+    }
+
+    /**
+     * A computed import is only a problem when the file owns a tier.
+     *
+     * A file that owns no tier cannot cross a tier boundary: there is no tier
+     * to cross. Such a file may split its code with a variable, and the rule
+     * has nothing to say about it. A file that owns a tier may reach a second
+     * one through a computed import, so the rule refuses the unknown source
+     * there.
+     *
+     * The report waits for the end of the file, because the tier of the file
+     * may be declared after the computed import.
+     */
+    function reportUnknown() {
+      if (owned.size === 0) return;
+      for (const node of unknown) {
+        context.report({ node, messageId: "crossTierUnknown" });
+      }
     }
 
     return {
@@ -462,6 +482,9 @@ const noCrossTierStore = {
           return;
         }
         check(node, source);
+      },
+      "Program:exit"() {
+        reportUnknown();
       },
     };
   },
