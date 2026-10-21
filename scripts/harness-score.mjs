@@ -181,6 +181,7 @@ const EXPECTED_PROOF_NAMES = [
   "the second toolchain criterion fails when the rust gate only prints",
   "the scorer refuses a second run while the tree lock is held",
   "the harness fails when it takes longer than the ceiling",
+  "the next run restores the probe file of a run that was killed",
 ];
 
 const GATE_NAMES = ["coverage", "proof-set", "runtime"];
@@ -296,7 +297,37 @@ function treePath(kind) {
 }
 
 const lockPath = treePath("lock");
-const journalPath = treePath("journal");
+
+/**
+ * The journal of the run.
+ *
+ * The name of the journal holds the pid of the run that wrote it, so two runs
+ * that are killed in the same tree leave two journals and neither of them
+ * loses the record of the other. The next run restores every journal of the
+ * tree and removes them.
+ */
+const journalPrefix = `arrow-harness-tree-journal-${treeHash}-`;
+const journalPath = path.join(os.tmpdir(), `${journalPrefix}${process.pid}.json`);
+
+/**
+ * The journals of this tree that a killed run left behind.
+ *
+ * The prover keeps its own journal, and a killed proof run leaves probe files
+ * in the tree too. The scorer owns the tree while it runs, so it repairs both
+ * kinds of journal before it reads a single file.
+ */
+function journalPaths() {
+  const prefixes = [journalPrefix, `arrow-prove-journal-${treeHash}-`];
+  let names = [];
+  try {
+    names = readdirSync(os.tmpdir());
+  } catch {
+    return [];
+  }
+  return names
+    .filter((name) => name.endsWith(".json") && prefixes.some((prefix) => name.startsWith(prefix)))
+    .map((name) => path.join(os.tmpdir(), name));
+}
 
 /** The milliseconds a run waits for the lock before it refuses to run. */
 const lockWaitMs = Number(process.env.HARNESS_LOCK_WAIT_MS ?? 30_000);
@@ -465,24 +496,24 @@ function restoreTree() {
  * puts the tree back before it writes anything of its own.
  */
 function recoverStaleProbes() {
-  if (!existsSync(journalPath)) return;
-
-  try {
-    const stale = JSON.parse(readFileSync(journalPath, "utf8"));
-    if (stale.root === root && Array.isArray(stale.pendingFiles)) {
-      for (const entry of stale.pendingFiles) {
-        if (entry.existed) writeFileSync(entry.path, entry.content);
-        else rmSync(entry.path, { force: true });
+  for (const file of journalPaths()) {
+    try {
+      const stale = JSON.parse(readFileSync(file, "utf8"));
+      if (stale.root === root && Array.isArray(stale.pendingFiles)) {
+        for (const entry of stale.pendingFiles) {
+          if (entry.existed) writeFileSync(entry.path, entry.content);
+          else rmSync(entry.path, { force: true });
+        }
+        console.log(
+          `harness: restored ${stale.pendingFiles.length} probe file(s) left behind by an earlier run`,
+        );
       }
-      console.log(
-        `harness: restored ${stale.pendingFiles.length} probe file(s) left behind by an earlier run`,
-      );
+    } catch (error) {
+      console.error(`harness: could not read the probe journal: ${error.message}`);
     }
-  } catch (error) {
-    console.error(`harness: could not read the probe journal: ${error.message}`);
-  }
 
-  rmSync(journalPath, { force: true });
+    rmSync(file, { force: true });
+  }
 }
 
 /**

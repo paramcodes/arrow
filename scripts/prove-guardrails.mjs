@@ -36,6 +36,7 @@ import {
   mkdirSync,
   openSync,
   readFileSync,
+  readdirSync,
   renameSync,
   rmSync,
   statSync,
@@ -128,6 +129,7 @@ const EXPECTED_PROOF_NAMES = [
   "the second toolchain criterion fails when the rust gate only prints",
   "the scorer refuses a second run while the tree lock is held",
   "the harness fails when it takes longer than the ceiling",
+  "the next run restores the probe file of a run that was killed",
 ];
 
 if (!Number.isInteger(minimumProofs) || minimumProofs < 1) {
@@ -173,6 +175,8 @@ function expand(text, probe) {
     .replaceAll("${PM_EXEC}", execCommand)
     .replaceAll("${DATA_ALIAS}", alias)
     .replaceAll("${PROOF_COUNT}", String(EXPECTED_PROOF_NAMES.length))
+    .replaceAll("${TREE_ROOT}", root)
+    .replaceAll("${TREE_HASH}", treeHash)
     .replaceAll("${PROBE}", probe ?? "");
 }
 
@@ -218,6 +222,9 @@ function run(command, probe) {
 
 function directoriesFor(file) {
   const missing = [];
+  // A path outside the tree has its directories already, and the tree must
+  // not grow a directory for it.
+  if (path.isAbsolute(file)) return missing;
   let current = path.dirname(path.join(root, file));
   while (current.startsWith(root) && !existsSync(current)) {
     missing.push(current);
@@ -230,11 +237,30 @@ function directoriesFor(file) {
  * The journal holds the state of the files the runner is about to overwrite.
  * It lives outside the tree, so a run that is killed outright still leaves a
  * record that the next run restores.
+ *
+ * The name of the journal holds the pid of the run that wrote it, so two runs
+ * that are killed in the same tree leave two journals and neither of them
+ * loses the record of the other. The next run restores every journal of the
+ * tree and removes them.
  */
-const journalPath = path.join(
-  os.tmpdir(),
-  `arrow-prove-journal-${createHash("sha256").update(root).digest("hex").slice(0, 12)}.json`,
-);
+const treeHash = createHash("sha256").update(root).digest("hex").slice(0, 12);
+const journalPrefix = `arrow-prove-journal-${treeHash}-`;
+const journalPath = path.join(os.tmpdir(), `${journalPrefix}${process.pid}.json`);
+
+/**
+ * The journals of this tree that a killed run left behind.
+ */
+function journalPaths() {
+  let names = [];
+  try {
+    names = readdirSync(os.tmpdir());
+  } catch {
+    return [];
+  }
+  return names
+    .filter((name) => name.startsWith(journalPrefix) && name.endsWith(".json"))
+    .map((name) => path.join(os.tmpdir(), name));
+}
 
 /**
  * The lock of the run.
@@ -447,24 +473,24 @@ function restoreTree() {
  * puts the tree back before it writes anything of its own.
  */
 function recoverStaleProbes() {
-  if (!existsSync(journalPath)) return;
-
-  try {
-    const stale = JSON.parse(readFileSync(journalPath, "utf8"));
-    if (stale.root === root && Array.isArray(stale.pendingFiles)) {
-      for (const entry of stale.pendingFiles) {
-        if (entry.existed) writeFileSync(entry.path, entry.content);
-        else rmSync(entry.path, { force: true });
+  for (const file of journalPaths()) {
+    try {
+      const stale = JSON.parse(readFileSync(file, "utf8"));
+      if (stale.root === root && Array.isArray(stale.pendingFiles)) {
+        for (const entry of stale.pendingFiles) {
+          if (entry.existed) writeFileSync(entry.path, entry.content);
+          else rmSync(entry.path, { force: true });
+        }
+        console.log(
+          `prove: restored ${stale.pendingFiles.length} probe file(s) left behind by an earlier run`,
+        );
       }
-      console.log(
-        `prove: restored ${stale.pendingFiles.length} probe file(s) left behind by an earlier run`,
-      );
+    } catch (error) {
+      console.error(`prove: could not read the probe journal: ${error.message}`);
     }
-  } catch (error) {
-    console.error(`prove: could not read the probe journal: ${error.message}`);
-  }
 
-  rmSync(journalPath, { force: true });
+    rmSync(file, { force: true });
+  }
 }
 
 function onSignal(signal) {
@@ -536,14 +562,18 @@ for (const proof of proofs) {
 
   try {
     for (const write of writes) {
-      const target = path.join(root, write.path);
+      // A write path is inside the tree unless it names an absolute path. The
+      // journal of a killed run lives outside the tree, and a case has to be
+      // able to write one to prove that the next run repairs the tree.
+      const writePath = expand(write.path, write.path);
+      const target = path.isAbsolute(writePath) ? writePath : path.join(root, writePath);
       const existed = existsSync(target);
       pendingFiles.push({
         path: target,
         existed,
         content: existed ? readFileSync(target, "utf8") : "",
       });
-      for (const directory of directoriesFor(write.path)) {
+      for (const directory of directoriesFor(writePath)) {
         mkdirSync(directory, { recursive: true });
         pendingDirectories.add(directory);
       }
