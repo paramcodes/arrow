@@ -14,10 +14,13 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
+base64 = "0.22"
+portable-pty = "0.9.0"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tauri = { version = "2", features = [] }
 tauri-plugin-store = "2"
+tokio = { version = "1.53.3", features = ["time", "sync", "rt", "macros"] }
 
 [profile.release]
 codegen-units = 1
