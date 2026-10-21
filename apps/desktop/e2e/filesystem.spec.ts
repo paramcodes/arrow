@@ -211,6 +211,11 @@ test("deleting an open dirty file asks before it throws the work away", async ({
   await expect(page.getByTestId("close-confirm")).toBeVisible();
   await expect(page.getByTestId("close-confirm")).toContainText("util.ts has unsaved changes.");
 
+  const evidence = process.env.ARROW_EVIDENCE_DIR;
+  if (evidence) {
+    await page.screenshot({ path: `${evidence}/filesystem-delete-confirm.png`, fullPage: true });
+  }
+
   await page.getByTestId("close-confirm-cancel").click();
   await expect(page.getByTestId(`tree-item-${UTIL}`)).toBeVisible();
   await expect(page.getByTestId(`tab-${UTIL}`)).toBeVisible();
