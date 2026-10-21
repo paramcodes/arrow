@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, type RefObject } from "react";
 
 import { baseExtensions } from "./extensions/base";
 import { languageFor } from "./languages";
+import { sameExtensions, selectionAfterContentChange } from "./sync";
 
 /**
  * The React wrapper of the editor.
@@ -11,6 +12,11 @@ import { languageFor } from "./languages";
  * The wrapper owns the lifecycle of the CodeMirror view: it creates the view
  * in an effect, keeps the document, the language and the extensions in step
  * with the props, and tears the view down when the component unmounts.
+ *
+ * Every prop that can change after the mount reaches the view through its own
+ * effect: the language through a compartment, the extensions through a second
+ * compartment, and the text through a change of the document that keeps the
+ * caret where it was.
  *
  * The wrapper never reads a store. A store that lives outside React reaches
  * the editor through the `onChange` callback, and a caller that needs the
@@ -48,7 +54,9 @@ export function Editor({
   const host = useRef<HTMLDivElement | null>(null);
   const view = useRef<EditorView | null>(null);
   const languageCompartment = useRef(new Compartment());
+  const extensionsCompartment = useRef(new Compartment());
   const configured = useRef<Extension | null>(null);
+  const mounted = useRef<readonly Extension[] | undefined>(undefined);
   const change = useRef(onChange);
 
   const support = useMemo(() => languageFor(language), [language]);
@@ -63,13 +71,14 @@ export function Editor({
 
     const parser = support ?? [];
     configured.current = parser;
+    mounted.current = extensions ?? [];
 
     const state = EditorState.create({
       doc: content,
       extensions: [
         ...baseExtensions,
         languageCompartment.current.of(parser),
-        ...(extensions ?? []),
+        extensionsCompartment.current.of(mounted.current),
         EditorView.updateListener.of((update) => {
           if (update.docChanged) change.current?.(update.state.doc.toString());
         }),
@@ -93,8 +102,16 @@ export function Editor({
     const instance = view.current;
     if (!instance) return;
     const current = instance.state.doc.toString();
+    // A change that came from typing inside the editor is already in the
+    // document, and the transaction of the typing owns the selection.
     if (current === content) return;
-    instance.dispatch({ changes: { from: 0, to: current.length, insert: content } });
+    const changes = instance.state.changes({ from: 0, to: current.length, insert: content });
+    const selection = selectionAfterContentChange(
+      instance.state.doc,
+      instance.state.selection,
+      changes.apply(instance.state.doc),
+    );
+    instance.dispatch({ changes, selection });
   }, [content]);
 
   useEffect(() => {
@@ -105,6 +122,15 @@ export function Editor({
     configured.current = parser;
     instance.dispatch({ effects: languageCompartment.current.reconfigure(parser) });
   }, [support]);
+
+  useEffect(() => {
+    const instance = view.current;
+    if (!instance) return;
+    const next = extensions ?? [];
+    if (sameExtensions(mounted.current, next)) return;
+    mounted.current = next;
+    instance.dispatch({ effects: extensionsCompartment.current.reconfigure(next) });
+  }, [extensions]);
 
   return (
     <div

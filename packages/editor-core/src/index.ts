@@ -13,6 +13,7 @@
 export { Editor, type EditorProps } from "./Editor";
 export { baseExtensions } from "./extensions/base";
 export { arrowKeymap } from "./extensions/keymaps";
+export { contentMarker } from "./extensions/marker";
 export { arrowDarkTheme, arrowHighlightStyle } from "./extensions/theme";
 export {
   languageFor,
