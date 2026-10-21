@@ -118,6 +118,9 @@ const EXPECTED_PROOF_NAMES = [
   "the ci criterion fails when the verify step swallows the failure",
   "the ci criterion fails when the verify step is commented out",
   "the local gate criterion fails when the lint command is only a comment",
+  "the extensions prop that is dropped after the mount is caught",
+  "a content change that loses the caret is caught",
+  "the active line case fails when the active line is not painted",
 ];
 
 if (!Number.isInteger(minimumProofs) || minimumProofs < 1) {

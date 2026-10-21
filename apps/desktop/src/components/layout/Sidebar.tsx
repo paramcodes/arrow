@@ -1,6 +1,7 @@
 import { ScrollArea } from "@arrow/ui";
 
 import { useLayoutStore, type ActivePanel } from "../../stores/layout";
+import { FileTree } from "../sidebar/FileTree";
 
 /** The title of every panel of the sidebar. */
 const TITLES: Record<ActivePanel, string> = {
@@ -13,7 +14,7 @@ const TITLES: Record<ActivePanel, string> = {
 
 /** The line each panel shows while it waits for its own session. */
 const NOTES: Record<ActivePanel, string> = {
-  explorer: "The file tree lands in a later session.",
+  explorer: "The files of the workspace.",
   search: "The search across the workspace lands in a later session.",
   git: "The source control view lands in a later session.",
   chat: "The chat with the assistant lands in a later session.",
@@ -36,7 +37,11 @@ export function Sidebar() {
         {TITLES[activePanel]}
       </header>
       <ScrollArea className="min-h-0 flex-1">
-        <p className="p-2 text-xs text-ink-tertiary">{NOTES[activePanel]}</p>
+        {activePanel === "explorer" ? (
+          <FileTree />
+        ) : (
+          <p className="p-2 text-xs text-ink-tertiary">{NOTES[activePanel]}</p>
+        )}
       </ScrollArea>
     </div>
   );

@@ -32,6 +32,52 @@ export const supportedLanguages = {
 /** The name of every language the registry holds. */
 export const supportedLanguageIds = Object.keys(supportedLanguages);
 
+/** The language Arrow opens a document in when it does not know its extension. */
+export const PLAIN_TEXT_LANGUAGE = "plaintext";
+
+/**
+ * The language of a file extension.
+ *
+ * The mapping is the only place that knows which extension opens in which
+ * language. An extension that is missing here is not guessed: the document
+ * opens as plain text, so a file Arrow cannot parse never opens in a parser of
+ * another language.
+ */
+const EXTENSION_LANGUAGES: Readonly<Record<string, string>> = {
+  js: "javascript",
+  mjs: "javascript",
+  cjs: "javascript",
+  jsx: "jsx",
+  ts: "typescript",
+  mts: "typescript",
+  cts: "typescript",
+  tsx: "tsx",
+  py: "python",
+  pyw: "python",
+  rs: "rust",
+  json: "json",
+  md: "markdown",
+  markdown: "markdown",
+  html: "html",
+  htm: "html",
+  css: "css",
+};
+
+/**
+ * The language of a path, read from the extension of its file name.
+ *
+ * A name without an extension, a dotfile such as `.gitignore` and an
+ * extension the registry does not know are all plain text.
+ */
+export function languageForPath(path: string): string {
+  const name = path.split(/[\\/]/).pop() ?? "";
+  const dot = name.lastIndexOf(".");
+  if (dot <= 0 || dot === name.length - 1) return PLAIN_TEXT_LANGUAGE;
+
+  const extension = name.slice(dot + 1).toLowerCase();
+  return EXTENSION_LANGUAGES[extension] ?? PLAIN_TEXT_LANGUAGE;
+}
+
 /**
  * The parser of a language, or undefined when the registry does not know it.
  *

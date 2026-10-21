@@ -96,9 +96,11 @@ describe("the layout store", () => {
 
     for (const name of files) {
       const source = readFileSync(`${storesDirectory}${name}`, "utf8");
+      const store = name.replace(/\.test\.ts$/, "");
+      const reset = `reset${store.charAt(0).toUpperCase()}${store.slice(1)}Store(`;
 
       expect(source, `${name} has no beforeEach hook`).toContain("beforeEach");
-      expect(source, `${name} does not reset the store`).toContain("resetLayoutStore(");
+      expect(source, `${name} does not reset the store`).toContain(reset);
     }
   });
 });

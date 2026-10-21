@@ -2,7 +2,7 @@ import { ensureSyntaxTree } from "@codemirror/language";
 import { EditorState } from "@codemirror/state";
 import { describe, expect, it } from "vitest";
 
-import { languageFor, supportedLanguageIds, supportedLanguages } from "./index";
+import { languageFor, languageForPath, supportedLanguageIds, supportedLanguages } from "./index";
 
 /**
  * The language registry of Arrow.
@@ -72,5 +72,21 @@ describe("the language registry", () => {
   it("keeps one parser per language, so a reconfiguration reuses it", () => {
     expect(languageFor("typescript")).toBe(supportedLanguages.typescript);
     expect(languageFor("rust")).toBe(supportedLanguages.rust);
+  });
+
+  it("reads the language of a path from its extension", () => {
+    expect(languageForPath("/workspace/src/app.ts")).toBe("typescript");
+    expect(languageForPath("src/component.tsx")).toBe("tsx");
+    expect(languageForPath("/workspace/README.MD")).toBe("markdown");
+    expect(languageForPath("scripts/build.mjs")).toBe("javascript");
+    expect(languageForPath("/workspace/src/main.rs")).toBe("rust");
+  });
+
+  it("opens a path it cannot name as plain text", () => {
+    expect(languageForPath("/workspace/LICENSE")).toBe("plaintext");
+    expect(languageForPath("/workspace/.gitignore")).toBe("plaintext");
+    expect(languageForPath("/workspace/notes.")).toBe("plaintext");
+    expect(languageForPath("/workspace/data.brainfuck")).toBe("plaintext");
+    expect(languageFor(languageForPath("/workspace/data.brainfuck"))).toBeUndefined();
   });
 });

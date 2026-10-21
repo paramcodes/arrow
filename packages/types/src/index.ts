@@ -18,7 +18,12 @@ export interface AppInfo {
 /** The theme tiers Arrow ships. Dark is the first tier, not an afterthought. */
 export type ThemeTier = "dark" | "light";
 
-/** The result of a command that crossed the Tauri boundary. */
-export type CommandResult<T> =
-  | { readonly ok: true; readonly value: T }
-  | { readonly ok: false; readonly reason: string };
+/** One entry of a directory, as the shell reads it from the disk. */
+export interface FileEntry {
+  /** The file name of the entry, without its directory. */
+  readonly name: string;
+  /** The path of the entry. */
+  readonly path: string;
+  /** True when the entry is a directory. */
+  readonly isDirectory: boolean;
+}

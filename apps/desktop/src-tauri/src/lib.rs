@@ -4,9 +4,19 @@
 //! terminal, git and the AI client. The webview never holds a secret and
 //! never touches the disk directly.
 
+pub mod commands;
+
 /// Build and run the Arrow desktop shell.
 pub fn run() {
     tauri::Builder::default()
+        .invoke_handler(tauri::generate_handler![
+            commands::fs::read_directory,
+            commands::fs::read_file,
+            commands::fs::write_file,
+            commands::fs::create_entry,
+            commands::fs::delete_entry,
+            commands::fs::rename_entry,
+        ])
         .run(tauri::generate_context!())
         .expect("the Arrow desktop shell failed to start");
 }
