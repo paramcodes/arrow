@@ -1,5 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
+import { openApp } from "./support/app";
+
 /**
  * The watcher and the git layer of the frontend.
  *
@@ -54,7 +56,7 @@ function calls(page: Page) {
 }
 
 test("the tree follows a change of the disk", async ({ page }) => {
-  await page.goto("/");
+  await openApp(page);
   await expect(page.getByTestId("file-tree")).toBeVisible();
   await expand(page, `${ROOT}/src`);
 
@@ -72,7 +74,7 @@ test("the tree follows a change of the disk", async ({ page }) => {
 });
 
 test("a change of the disk reads the state of the repository again", async ({ page }) => {
-  await page.goto("/");
+  await openApp(page);
   await expand(page, `${ROOT}/src`);
 
   const before = (await calls(page)).filter((call) => call.command === "git_status").length;
@@ -85,7 +87,7 @@ test("a change of the disk reads the state of the repository again", async ({ pa
 });
 
 test("the tree shows the badge of the state of every file", async ({ page }) => {
-  await page.goto("/");
+  await openApp(page);
   await expand(page, `${ROOT}/src`);
 
   const modified = page.getByTestId(`tree-badge-${APP}`);
@@ -105,7 +107,7 @@ test("the tree shows the badge of the state of every file", async ({ page }) => 
 });
 
 test("the status bar shows the branch and the counts of the repository", async ({ page }) => {
-  await page.goto("/");
+  await openApp(page);
 
   await expect(page.getByTestId("status-branch")).toHaveText("main");
   await expect(page.getByTestId("status-modified")).toHaveText("1M");
@@ -114,7 +116,7 @@ test("the status bar shows the branch and the counts of the repository", async (
 });
 
 test("a project opens through the folder picker", async ({ page }) => {
-  await page.goto("/");
+  await openApp(page);
 
   await page.getByTestId("open-folder").click();
 
@@ -127,7 +129,7 @@ test("a project opens through the folder picker", async ({ page }) => {
 });
 
 test("the command palette opens a folder and reads the repository again", async ({ page }) => {
-  await page.goto("/");
+  await openApp(page);
 
   await page.keyboard.press("Control+Shift+P");
   await expect(page.getByTestId("command-palette")).toBeVisible();

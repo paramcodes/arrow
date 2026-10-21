@@ -1,5 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
+import { openApp } from "./support/app";
+
 declare global {
   interface Window {
     /** The caret of the active pane, for the end to end suite. */
@@ -67,7 +69,7 @@ async function caret(page: Page) {
 }
 
 test("the tree reads the workspace and opens a file inside the shell", async ({ page }) => {
-  await page.goto("/");
+  await openApp(page);
 
   await expect(page.getByTestId("file-tree")).toBeVisible();
   await expand(page, `${ROOT}/src`);
@@ -91,7 +93,7 @@ test("the tree reads the workspace and opens a file inside the shell", async ({ 
 test("a modified file shows a dirty indicator, and Cmd+S writes it to the disk", async ({
   page,
 }) => {
-  await page.goto("/");
+  await openApp(page);
   await expand(page, `${ROOT}/src`);
   await open(page, APP);
 
@@ -114,7 +116,7 @@ test("a modified file shows a dirty indicator, and Cmd+S writes it to the disk",
 });
 
 test("closing a tab with unsaved changes asks first", async ({ page }) => {
-  await page.goto("/");
+  await openApp(page);
   await expand(page, `${ROOT}/src`);
   await open(page, UTIL);
 
@@ -135,7 +137,7 @@ test("closing a tab with unsaved changes asks first", async ({ page }) => {
 });
 
 test("switching tabs preserves the caret of each file", async ({ page }) => {
-  await page.goto("/");
+  await openApp(page);
   await expand(page, `${ROOT}/src`);
   await open(page, APP);
   await open(page, UTIL);
@@ -166,7 +168,7 @@ test("switching tabs preserves the caret of each file", async ({ page }) => {
 });
 
 test("the context menu creates, renames and deletes an entry", async ({ page }) => {
-  await page.goto("/");
+  await openApp(page);
   await expect(page.getByTestId("file-tree")).toBeVisible();
   await expand(page, `${ROOT}/src`);
 
@@ -195,7 +197,7 @@ test("the context menu creates, renames and deletes an entry", async ({ page }) 
 });
 
 test("deleting an open dirty file asks before it throws the work away", async ({ page }) => {
-  await page.goto("/");
+  await openApp(page);
   await expand(page, `${ROOT}/src`);
   await open(page, UTIL);
 
@@ -231,7 +233,7 @@ test("deleting an open dirty file asks before it throws the work away", async ({
 });
 
 test("the shell shows the tree, the tabs and the editor together", async ({ page }) => {
-  await page.goto("/");
+  await openApp(page);
   await expand(page, `${ROOT}/src`);
   await open(page, APP);
   await open(page, UTIL);

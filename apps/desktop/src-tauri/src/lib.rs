@@ -33,6 +33,30 @@ pub mod git;
 #[path = "commands/watcher.rs"]
 pub mod watcher_commands;
 
+/// The AI commands sit in `commands/ai.rs`, beside the other commands, and
+/// this session owns `lib.rs` and not `commands/mod.rs`.
+#[path = "commands/ai.rs"]
+pub mod ai_commands;
+
+/// The keychain commands sit in `commands/keys.rs`, beside the other commands.
+#[path = "commands/keys.rs"]
+pub mod key_commands;
+
+/// The context builder of the AI feature.
+///
+/// The client, the providers and the normalizers live in `ai/` beside it, and
+/// the other half of this session owns those files and the module tree of that
+/// directory. The builder and the keychain are declared here, with a path of
+/// their own, so the tree of the feature does not depend on the half that is
+/// written at the same time.
+#[path = "ai/context.rs"]
+pub mod ai_context;
+
+/// The keychain of the AI feature. The key of a provider lives here and in the
+/// keychain of the operating system, and it never leaves Rust.
+#[path = "ai/keys.rs"]
+pub mod ai_keys;
+
 /// Build and run the Arrow desktop shell.
 pub fn run() {
     tauri::Builder::default()
@@ -45,6 +69,12 @@ pub fn run() {
             app.manage(pty::PtyManager::new(sink));
             // The watches of the application live as long as the shell does.
             app.manage(watcher::WatcherRegistry::new());
+            // The requests of the AI feature live as long as the shell does,
+            // so a cancel can find the request that is in flight.
+            app.manage(Arc::new(ai_commands::AiRequests::new()));
+            // The keys live in the keychain of the operating system. The
+            // webview never holds one.
+            app.manage(ai_keys::KeyStore::os());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -68,6 +98,12 @@ pub fn run() {
             git::git_diff_stat,
             watcher_commands::watch_directory,
             watcher_commands::unwatch,
+            ai_commands::complete,
+            ai_commands::inline_edit,
+            ai_commands::cancel_request,
+            key_commands::set_api_key,
+            key_commands::get_api_key,
+            key_commands::delete_api_key,
         ])
         .run(tauri::generate_context!())
         .expect("the Arrow desktop shell failed to start");
@@ -121,9 +157,23 @@ mod tests {
         assert!(crate::git::COMMANDS.contains(&"git_diff_stat"));
     }
 
+    /// The AI commands are registered on the same shell. The lists are the
+    /// names of the frontend contract, in one place.
+    #[test]
+    fn the_ai_commands_are_part_of_the_contract() {
+        assert_eq!(crate::ai_commands::COMMANDS.len(), 3);
+        assert!(crate::ai_commands::COMMANDS.contains(&"complete"));
+        assert!(crate::ai_commands::COMMANDS.contains(&"inline_edit"));
+        assert!(crate::ai_commands::COMMANDS.contains(&"cancel_request"));
+
+        assert_eq!(crate::key_commands::COMMANDS.len(), 3);
+        assert!(crate::key_commands::COMMANDS.contains(&"set_api_key"));
+        assert!(crate::key_commands::COMMANDS.contains(&"get_api_key"));
+        assert!(crate::key_commands::COMMANDS.contains(&"delete_api_key"));
+    }
+
     /// The folder picker is a plugin of the shell, and the capability that
-    /// allows it lies in the tree.
-    ///
+    /// allows it lies in the tree.    ///
     /// The permission of the plugin resolves only when the plugin is
     /// registered, so the build of the shell is what proves the registration.
     /// The capability itself proves that the picker is allowed.

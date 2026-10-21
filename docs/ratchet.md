@@ -34,6 +34,9 @@ rerun it.
   case writes a file that breaks the rule, runs the checker that owns the rule, and asserts the
   checker failed.
 - A behavioural fix gets a test.
+- A guardrail that is the harness itself gets a mutation in the self proof, `scripts/prove-harness.mjs`.
+  The mutation breaks a copy of the harness, and the scorer has to fail on it, so a harness that
+  cannot fail is caught before it is trusted.
 - A guardrail that cannot run offline, such as a change to a CI workflow, gets the strongest check
   that can run offline, and the log row says plainly that it is not a proof of the runner.
 

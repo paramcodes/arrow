@@ -1,5 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
+import { openApp, reloadApp } from "./support/app";
+
 /**
  * The command palette, the quick-open and the settings dialog.
  *
@@ -42,7 +44,7 @@ function activePane(page: Page) {
 test("the command palette opens on the shortcut and searches with fuzzy letters", async ({
   page,
 }) => {
-  await page.goto("/");
+  await openApp(page);
 
   await page.keyboard.press("Control+Shift+P");
   await expect(palette(page)).toBeVisible();
@@ -61,7 +63,7 @@ test("the command palette opens on the shortcut and searches with fuzzy letters"
 });
 
 test("a command of the palette runs and closes the palette", async ({ page }) => {
-  await page.goto("/");
+  await openApp(page);
   await expect(page.getByTestId("sidebar")).toBeVisible();
 
   await page.keyboard.press("Control+Shift+P");
@@ -75,7 +77,7 @@ test("a command of the palette runs and closes the palette", async ({ page }) =>
 });
 
 test("the quick-open lists the files of the workspace and opens one", async ({ page }) => {
-  await page.goto("/");
+  await openApp(page);
 
   await page.keyboard.press("Control+P");
   await expect(palette(page)).toBeVisible();
@@ -91,7 +93,7 @@ test("the quick-open lists the files of the workspace and opens one", async ({ p
 });
 
 test("the palette offers every shortcut of the shell as a command", async ({ page }) => {
-  await page.goto("/");
+  await openApp(page);
 
   await page.keyboard.press("Control+Shift+P");
   await expect(page.getByTestId("command-item-view.toggleSidebar")).toBeVisible();
@@ -104,7 +106,7 @@ test("the palette offers every shortcut of the shell as a command", async ({ pag
 });
 
 test("Cmd+, opens the settings, and the size and the wrapping apply live", async ({ page }) => {
-  await page.goto("/");
+  await openApp(page);
 
   // A document has to be open before the size of its text can be read.
   await page.keyboard.press("Control+P");
@@ -134,7 +136,7 @@ test("Cmd+, opens the settings, and the size and the wrapping apply live", async
 });
 
 test("the settings survive a restart of the window", async ({ page }) => {
-  await page.goto("/");
+  await openApp(page);
 
   await page.keyboard.press("Control+,");
   await page.getByTestId("settings-font-size").fill("21");
@@ -145,7 +147,9 @@ test("the settings survive a restart of the window", async ({ page }) => {
 
   // A reload is the browser build's restart: the store of the browser holds
   // the document the window wrote, exactly as the plugin store does on disk.
-  await page.reload();
+  // The window is ready again only when the key handler is attached, so the
+  // shortcut below is not lost.
+  await reloadApp(page);
   await expect(page.getByTestId("app-shell")).toBeVisible();
 
   await page.keyboard.press("Control+,");
@@ -156,7 +160,7 @@ test("the settings survive a restart of the window", async ({ page }) => {
 });
 
 test("the status bar names the language of the active file", async ({ page }) => {
-  await page.goto("/");
+  await openApp(page);
   await expect(page.getByTestId("status-language")).toHaveText("Plain Text");
 
   await page.keyboard.press("Control+P");

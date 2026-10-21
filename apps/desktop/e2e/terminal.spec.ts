@@ -1,5 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
+import { openApp } from "./support/app";
+
 /**
  * The integrated terminal.
  *
@@ -44,7 +46,7 @@ declare global {
 
 /** Opens the bottom panel and waits for the first terminal session. */
 async function openTerminal(page: Page): Promise<void> {
-  await page.goto("/");
+  await openApp(page);
   await page.getByTestId("activity-terminal").click();
   await expect(page.getByTestId("terminal-manager")).toBeVisible();
 

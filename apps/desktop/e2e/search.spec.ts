@@ -1,5 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
+import { openApp } from "./support/app";
+
 /**
  * The search of the workspace.
  *
@@ -22,7 +24,7 @@ function activePane(page: Page) {
 }
 
 test("the search panel finds a phrase across the files of the workspace", async ({ page }) => {
-  await page.goto("/");
+  await openApp(page);
 
   await page.getByTestId("activity-search").click();
   await expect(page.getByTestId("search-panel")).toBeVisible();
@@ -45,7 +47,7 @@ test("the search panel finds a phrase across the files of the workspace", async 
 });
 
 test("a search result opens its file at the matching line", async ({ page }) => {
-  await page.goto("/");
+  await openApp(page);
 
   await page.getByTestId("activity-search").click();
   await searchInput(page).fill("return greet");
@@ -65,7 +67,7 @@ test("a search result opens its file at the matching line", async ({ page }) => 
 });
 
 test("a query that matches nothing says so", async ({ page }) => {
-  await page.goto("/");
+  await openApp(page);
 
   await page.getByTestId("activity-search").click();
   await searchInput(page).fill("this phrase is not in the fixture workspace");
