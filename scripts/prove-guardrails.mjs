@@ -262,10 +262,20 @@ function journalPaths() {
   } catch {
     return [];
   }
-  return names
-    .filter((name) => name.endsWith(".json") && prefixes.some((prefix) => name.startsWith(prefix)))
-    .filter((name) => !journalOwnerIsAlive(name))
-    .map((name) => path.join(os.tmpdir(), name));
+  return (
+    names
+      .filter(
+        (name) => name.endsWith(".json") && prefixes.some((prefix) => name.startsWith(prefix)),
+      )
+      .filter((name) => !journalOwnerIsAlive(name))
+      .map((name) => path.join(os.tmpdir(), name))
+      // The newest journal first. Every journal holds the state of the tree
+      // before its own run wrote to it, so the newest journal undoes the
+      // newest run, and the one before it undoes the run before that. The
+      // other order leaves the file of a run that a later run found on the
+      // tree, and the tree stays dirty.
+      .sort((a, b) => statSync(b).mtimeMs - statSync(a).mtimeMs)
+  );
 }
 
 /**
