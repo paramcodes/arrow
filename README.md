@@ -30,12 +30,11 @@ The command palette searches the commands of the shell.
 - A terminal on a real PTY. Every tab owns one shell, and the output comes back in chunks.
 - Git in the status bar and in the tree. The branch, the counts of the diff, and a badge on every
   changed file.
-- A command palette on `Ctrl+Shift+P`, a project search, and a settings dialog that persists.
+- A command palette on `Ctrl+Shift+P`, a project search, and a settings dialog whose values persist.
 
 ## Requirements
 
-- Node.js 22 or newer. The repository pins the version in `package.json` and in the workflow of
-  CI.
+- Node.js 22 or newer. `package.json` asks for 22 or newer, and the workflow of CI installs 22.
 - pnpm 12.9.1, the version `package.json` names in `packageManager`.
 - A Rust toolchain on the stable channel, with the `clippy` and `rustfmt` components. CI installs
   it with `dtolnay/rust-toolchain@stable`.
@@ -70,7 +69,7 @@ pnpm dev
 `pnpm dev` starts the Tauri shell. The shell starts the Vite dev server itself, so there is no
 second terminal to open.
 
-To work on the frontend in a browser instead, run the web build on its own. It has no Tauri host,
+To work on the frontend in a browser instead, run it on its own. The web build has no Tauri host,
 so every call to the shell answers from a stub:
 
 ```bash
@@ -87,18 +86,18 @@ cargo build --manifest-path apps/desktop/src-tauri/Cargo.toml
 
 Five commands check the repository. CI runs all of them on every pull request.
 
-| Command           | What it proves                                                                                                                                                  |
-| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pnpm verify`     | The format check, the lint, the typecheck, the unit tests and the build all pass.                                                                                 |
-| `pnpm test:e2e`   | The app boots in a plain browser with no Tauri host, and the editor, the tree, the terminal, the palette and the AI feature work when Playwright drives them. |
-| `pnpm harness`    | The repository holds every criterion of `harness.config.json`. A criterion runs a real check against the tree, so a rule that kept its words while losing its behaviour fails the score. |
-| `pnpm prove`      | Every guardrail catches the mistake it was made for. The prover writes the bad code on purpose and fails when a guardrail misses it.                            |
-| `pnpm prove-harness` | The harness can fail. The script copies the harness into a scratch tree, breaks the copy seven ways, and fails when the scorer passes on any of them.  |
+| Command              | What it proves                                                                                                                                                             |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm verify`        | The format check, the lint, the typecheck, the unit tests and the build all pass.                                                                                            |
+| `pnpm test:e2e`      | The app boots in a plain browser with no Tauri host, and the editor, the tree, the terminal, the palette and the AI feature work when Playwright drives them.            |
+| `pnpm harness`       | The repository holds every criterion of `harness.config.json`. A criterion runs a real check against the tree, so a rule that kept its words while losing its behaviour fails the score. |
+| `pnpm prove`         | Every guardrail catches the mistake it was made for. The prover writes the bad code on purpose and fails when a guardrail misses it.                                          |
+| `pnpm prove-harness` | The harness can fail. The script copies the harness into a scratch tree, breaks the copy seven ways, and fails when the scorer passes on any of them.                          |
 
-A test runner checks that the code does what it should. The harness does something else. It scores
-a set of criteria, and each criterion runs a check against the repository instead of against a
-function. The scorer holds the exact list of criteria, so a criterion that is deleted, renamed or
-duplicated fails the score. `pnpm prove-harness` closes the last gap: it breaks a copy of the
+A test runner checks that the code does what it should. The harness scores a set of criteria
+instead, and each criterion runs a check against the repository rather than against a function. The
+scorer holds the exact list of criteria, so a criterion that is deleted, renamed or duplicated
+fails the score. `pnpm prove-harness` answers the remaining question. It breaks a copy of the
 harness seven ways and shows that the scorer fails on every one of them.
 
 ## How the code is laid out
