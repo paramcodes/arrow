@@ -36,6 +36,7 @@ import {
   mkdirSync,
   openSync,
   readFileSync,
+  readdirSync,
   renameSync,
   rmSync,
   statSync,
@@ -72,163 +73,131 @@ const minimumProofs = config.minimumProofs;
  * list and of raising `minimumProofs` in the same commit.
  */
 const EXPECTED_PROOF_NAMES = [
+  "a color literal inside the token package is allowed",
+  "a component hardcodes a Tailwind default-palette utility",
+  "a component hardcodes a bare channel triplet",
+  "a component hardcodes a color",
+  "a component hardcodes a modern color function",
+  "a component hardcodes a named color",
+  "a content change that loses the caret is caught",
+  "a file reaches a state tier with a computed import",
+  "a file reaches a state tier with a computed require",
+  "a file with no state tier owns a computed import",
+  "a stylesheet outside the old scan bounds is scanned",
   "a workspace package imports the Tauri API",
   "a workspace package imports the desktop app",
   "a workspace package imports the desktop app by its package name",
-  "the source tree carries an inline lint config",
-  "the source tree carries a ts-expect-error",
-  "the source tree carries a skipped test",
-  "the source tree parses raw JSON",
-  "a component hardcodes a color",
-  "a component hardcodes a named color",
-  "the workspace ui alias resolves to its entry point",
-  "a component hardcodes a Tailwind default-palette utility",
-  "a component hardcodes a modern color function",
-  "a component hardcodes a bare channel triplet",
-  "a stylesheet outside the old scan bounds is scanned",
-  "a color literal inside the token package is allowed",
-  "a workspace package reaches the desktop app with a dynamic import",
-  "a workspace package reaches the desktop app with require",
-  "the webview bundle reads a key from the environment",
-  "the webview stores a key in browser storage",
-  "the webview logs a key",
-  "one file imports two state tiers",
-  "a file reaches a state tier with a computed import",
-  "a file reaches a state tier with a computed require",
-  "the local gate criterion fails when the hook commands lose their run lines",
-  "the ci criterion fails when the workflow stops running the harness",
-  "the escape hatch criterion fails when the rules are switched off",
-  "the ratchet criterion fails when the procedure is deleted",
-  "the mistake log criterion fails when the rows are deleted",
   "a workspace package reaches the desktop app with a computed import",
+  "a workspace package reaches the desktop app with a dynamic import",
   "a workspace package reaches the desktop app with a template import",
-  "the entry point criterion fails when the compiler options lose their strictness",
-  "the entry point criterion fails when the browser smoke spec is gutted",
-  "the entry point criterion fails when a rule names an unrelated path",
-  "the coverage criterion fails when a criterion is deleted and another is duplicated",
-  "the prover fails when a proof case is deleted and another is duplicated",
-  "the harness fails when a command criterion runs a no-op",
-  "the tailwind build scans the shared ui package",
-  "a file with no state tier owns a computed import",
-  "the prover refuses a second run while the lock is held",
-  "the store test that skips the reset is caught",
-  "the shell content padding that leaves eight pixels is caught",
-  "the ci criterion fails when the workflow stops running the end to end suite",
+  "a workspace package reaches the desktop app with require",
+  "one file imports two state tiers",
+  "the AI bridge never hands the key back",
+  "the AI store holds no key material",
+  "the active line case fails when the active line is not painted",
+  "the artifact criterion fails when the build output misses the source",
+  "the behavioral criterion fails when the end to end command only prints",
+  "the browser stub keeps no key material",
+  "the ci criterion fails when the verify step is commented out",
   "the ci criterion fails when the verify step only echoes the command",
   "the ci criterion fails when the verify step swallows the failure",
-  "the ci criterion fails when the verify step is commented out",
-  "the local gate criterion fails when the lint command is only a comment",
-  "the extensions prop that is dropped after the mount is caught",
-  "a content change that loses the caret is caught",
-  "the active line case fails when the active line is not painted",
+  "the ci criterion fails when the workflow stops running the end to end suite",
+  "the ci criterion fails when the workflow stops running the harness",
   "the command registry that grew an action without a spy for it is caught",
+  "the coverage criterion fails when a criterion is deleted and another is duplicated",
+  "the delete confirmation of a dirty file is caught",
   "the dialog permission lives in a capability of its own",
+  "the entry point criterion fails when a rule names an unrelated path",
+  "the entry point criterion fails when the browser smoke spec is gutted",
+  "the entry point criterion fails when the compiler options lose their strictness",
   "the error of the AI client carries no key",
   "the error of the AI client keeps the key out of the tree",
-  "the AI store holds no key material",
-  "the AI bridge never hands the key back",
-  "the browser stub keeps no key material",
+  "the escape hatch criterion fails when the rules are switched off",
+  "the extensions prop that is dropped after the mount is caught",
+  "the harness fails when a command criterion runs a no-op",
+  "the harness fails when it takes longer than the ceiling",
+  "the local gate criterion fails when the hook commands lose their run lines",
+  "the local gate criterion fails when the lint command is only a comment",
+  "the mistake log criterion fails when the rows are deleted",
+  "the next run restores the probe file of a run that was killed",
+  "the prover fails when a proof case is deleted and another is duplicated",
+  "the prover refuses a second run while the lock is held",
+  "the ratchet criterion fails when the procedure is deleted",
+  "the scorer refuses a second run while the tree lock is held",
+  "the second toolchain criterion fails when the rust gate only prints",
+  "the shell content padding that leaves eight pixels is caught",
+  "the source tree carries a skipped test",
+  "the source tree carries a ts-expect-error",
+  "the source tree carries an inline lint config",
+  "the source tree parses raw JSON",
+  "the store test that skips the reset is caught",
+  "the tailwind build scans the shared ui package",
+  "the theme cascade of the editor settings is caught",
+  "the webview bundle reads a key from the environment",
+  "the webview logs a key",
+  "the webview stores a key in browser storage",
+  "the workspace ui alias resolves to its entry point",
 ];
-
-if (!Number.isInteger(minimumProofs) || minimumProofs < 1) {
-  console.error(`prove: ${configPath} must set minimumProofs to a whole number of at least 1`);
-  process.exit(1);
-}
-
-if (minimumProofs !== EXPECTED_PROOF_NAMES.length) {
-  console.error(
-    `prove: minimumProofs is ${minimumProofs}, the harness holds ${EXPECTED_PROOF_NAMES.length} proof cases`,
-  );
-  process.exit(1);
-}
-
-const names = proofs.map((proof) => proof.name);
-const nameCounts = new Map();
-for (const name of names) nameCounts.set(name, (nameCounts.get(name) ?? 0) + 1);
-
-const missingNames = EXPECTED_PROOF_NAMES.filter((name) => !nameCounts.has(name));
-const unexpectedNames = names.filter((name) => !EXPECTED_PROOF_NAMES.includes(name));
-const duplicatedNames = [...nameCounts.entries()]
-  .filter(([, count]) => count > 1)
-  .map(([name]) => name);
-
-if (missingNames.length > 0 || unexpectedNames.length > 0 || duplicatedNames.length > 0) {
-  console.error("prove: the proof set does not hold the cases the harness holds");
-  if (missingNames.length > 0) console.error(`  missing: ${missingNames.join(", ")}`);
-  if (unexpectedNames.length > 0) console.error(`  unexpected: ${unexpectedNames.join(", ")}`);
-  if (duplicatedNames.length > 0) console.error(`  duplicated: ${duplicatedNames.join(", ")}`);
-  process.exit(1);
-}
-
-if (proofs.length < minimumProofs) {
-  console.error(
-    `prove: the proof set holds ${proofs.length} cases, at least ${minimumProofs} are required`,
-  );
-  process.exit(1);
-}
-
-function expand(text, probe) {
-  return String(text)
-    .replaceAll("${PM}", packageManager)
-    .replaceAll("${PM_EXEC}", execCommand)
-    .replaceAll("${DATA_ALIAS}", alias)
-    .replaceAll("${PROOF_COUNT}", String(EXPECTED_PROOF_NAMES.length))
-    .replaceAll("${PROBE}", probe ?? "");
-}
-
-/**
- * The checker runs in a child process without blocking the event loop. A
- * blocking call would swallow the interrupt that stops this script, which is
- * the one signal the operator can always send.
- */
-let runningChild = null;
-
-function run(command, probe) {
-  return new Promise((resolve) => {
-    const child = spawn(expand(command, probe), {
-      shell: true,
-      cwd: root,
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-    runningChild = child;
-
-    let output = "";
-    child.stdout.on("data", (chunk) => {
-      output += chunk;
-    });
-    child.stderr.on("data", (chunk) => {
-      output += chunk;
-    });
-    child.on("error", (error) => {
-      if (runningChild === child) runningChild = null;
-      resolve({ code: 1, output: `${output}${error.message}`.trim() });
-    });
-    child.on("close", (code) => {
-      if (runningChild === child) runningChild = null;
-      resolve({ code: typeof code === "number" ? code : 1, output: output.trim() });
-    });
-  });
-}
-
-function directoriesFor(file) {
-  const missing = [];
-  let current = path.dirname(path.join(root, file));
-  while (current.startsWith(root) && !existsSync(current)) {
-    missing.push(current);
-    current = path.dirname(current);
-  }
-  return missing.reverse();
-}
 
 /**
  * The journal holds the state of the files the runner is about to overwrite.
  * It lives outside the tree, so a run that is killed outright still leaves a
  * record that the next run restores.
+ *
+ * The name of the journal holds the pid of the run that wrote it, so two runs
+ * that are killed in the same tree leave two journals and neither of them
+ * loses the record of the other. The next run restores every journal of the
+ * tree and removes them.
  */
-const journalPath = path.join(
-  os.tmpdir(),
-  `arrow-prove-journal-${createHash("sha256").update(root).digest("hex").slice(0, 12)}.json`,
-);
+const treeHash = createHash("sha256").update(root).digest("hex").slice(0, 12);
+const journalPrefix = `arrow-prove-journal-${treeHash}-`;
+const journalPath = path.join(os.tmpdir(), `${journalPrefix}${process.pid}.json`);
+
+/**
+ * The journals of this tree that a killed run left behind.
+ *
+ * The journal of a run that is still alive belongs to that run, and a run
+ * that repairs the tree must not touch the files that run is holding. Only
+ * the journals of runs that are gone are repaired.
+ */
+function journalPaths() {
+  const prefixes = [journalPrefix, `arrow-harness-tree-journal-${treeHash}-`];
+  let names = [];
+  try {
+    names = readdirSync(os.tmpdir());
+  } catch {
+    return [];
+  }
+  return (
+    names
+      .filter(
+        (name) => name.endsWith(".json") && prefixes.some((prefix) => name.startsWith(prefix)),
+      )
+      .filter((name) => !journalOwnerIsAlive(name))
+      .map((name) => path.join(os.tmpdir(), name))
+      // The newest journal first. Every journal holds the state of the tree
+      // before its own run wrote to it, so the newest journal undoes the
+      // newest run, and the one before it undoes the run before that. The
+      // other order leaves the file of a run that a later run found on the
+      // tree, and the tree stays dirty.
+      .sort((a, b) => statSync(b).mtimeMs - statSync(a).mtimeMs)
+  );
+}
+
+/**
+ * True when the run that wrote the journal is still alive.
+ */
+function journalOwnerIsAlive(name) {
+  const match = name.match(/-(\d+)\.json$/);
+  if (!match) return false;
+  const pid = Number(match[1]);
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return error.code !== "ESRCH";
+  }
+}
 
 /**
  * The lock of the run.
@@ -251,16 +220,19 @@ const lockPath = resolveLockPath();
 function resolveLockPath() {
   const override = process.env.PROVE_LOCK_PATH;
   if (!override) {
+    // The lock is the lock of the tree, and the scorer of the harness holds
+    // the same one. A score and a proof run on one tree cannot interleave,
+    // so a run never reads a tree that a probe has half replaced.
     return path.join(
       os.tmpdir(),
-      `arrow-prove-lock-${createHash("sha256").update(root).digest("hex").slice(0, 12)}.lock`,
+      `arrow-harness-tree-lock-${createHash("sha256").update(root).digest("hex").slice(0, 12)}.lock`,
     );
   }
   return path.isAbsolute(override) ? override : path.join(root, override);
 }
 
 /** The milliseconds a run waits for the lock before it refuses to run. */
-const lockWaitMs = Number(process.env.PROVE_LOCK_WAIT_MS ?? 120_000);
+const lockWaitMs = Number(process.env.PROVE_LOCK_WAIT_MS ?? 30_000);
 
 /** The milliseconds after which a lock without a readable owner is stale. */
 const lockStaleMs = Number(process.env.PROVE_LOCK_STALE_MS ?? 60_000);
@@ -295,6 +267,48 @@ function lockOwnerIsGone() {
     return false;
   } catch (error) {
     return error.code === "ESRCH";
+  }
+}
+
+/**
+ * The name of the run that holds the lock, and how long it has held it.
+ */
+function describeLockHolder() {
+  try {
+    const holder = JSON.parse(readFileSync(lockPath, "utf8"));
+    if (typeof holder.startedAt !== "number" || holder.startedAt <= 0) {
+      return `the run with the pid ${holder.pid}, which has held the lock for an unknown time`;
+    }
+    const seconds = Math.max(0, Math.round((Date.now() - holder.startedAt) / 1000));
+    return `the run with the pid ${holder.pid}, which has held the lock for ${seconds} seconds`;
+  } catch {
+    return "a run whose holder cannot be read";
+  }
+}
+
+/**
+ * The pid that already owns the lock of this tree, when an ancestor of this
+ * run owns it.
+ *
+ * The scorer of the harness runs the prover inside the score, so the child
+ * prover is told that the tree is already owned. The two do not wait for each
+ * other, and a proof run that a score runs cannot fight over the probe files.
+ */
+function inheritedLockOwner() {
+  // A run that names a lock of its own must take that lock, even when an
+  // ancestor owns the tree. A case that proves the refusal of a second run
+  // names the lock on purpose, and a run that skipped it would write probe
+  // files into the tree of the run that holds it.
+  if (process.env.PROVE_LOCK_PATH) return null;
+  const raw = process.env.HARNESS_TREE_LOCK_OWNER;
+  if (!raw) return null;
+  const pid = Number(raw);
+  if (!Number.isInteger(pid) || pid <= 0) return null;
+  try {
+    process.kill(pid, 0);
+    return pid;
+  } catch (error) {
+    return error.code === "ESRCH" ? null : pid;
   }
 }
 
@@ -358,6 +372,9 @@ let pendingFiles = [];
 let pendingDirectories = new Set();
 let journalWritten = false;
 
+/** The pid that owns the lock of the tree while this run runs. */
+let lockOwnerPid = null;
+
 function writeJournal() {
   try {
     writeFileSync(journalPath, JSON.stringify({ root, pendingFiles }, null, 2));
@@ -401,24 +418,24 @@ function restoreTree() {
  * puts the tree back before it writes anything of its own.
  */
 function recoverStaleProbes() {
-  if (!existsSync(journalPath)) return;
-
-  try {
-    const stale = JSON.parse(readFileSync(journalPath, "utf8"));
-    if (stale.root === root && Array.isArray(stale.pendingFiles)) {
-      for (const entry of stale.pendingFiles) {
-        if (entry.existed) writeFileSync(entry.path, entry.content);
-        else rmSync(entry.path, { force: true });
+  for (const file of journalPaths()) {
+    try {
+      const stale = JSON.parse(readFileSync(file, "utf8"));
+      if (stale.root === root && Array.isArray(stale.pendingFiles)) {
+        for (const entry of stale.pendingFiles) {
+          if (entry.existed) writeFileSync(entry.path, entry.content);
+          else rmSync(entry.path, { force: true });
+        }
+        console.log(
+          `prove: restored ${stale.pendingFiles.length} probe file(s) left behind by an earlier run`,
+        );
       }
-      console.log(
-        `prove: restored ${stale.pendingFiles.length} probe file(s) left behind by an earlier run`,
-      );
+    } catch (error) {
+      console.error(`prove: could not read the probe journal: ${error.message}`);
     }
-  } catch (error) {
-    console.error(`prove: could not read the probe journal: ${error.message}`);
-  }
 
-  rmSync(journalPath, { force: true });
+    rmSync(file, { force: true });
+  }
 }
 
 function onSignal(signal) {
@@ -437,15 +454,127 @@ function onSignal(signal) {
  *
  * The lock is taken before the stale probes are repaired, so two runs can
  * never repair the same probe at the same time.
+ *
+ * A run that an ancestor of it owns the tree for does not take the lock a
+ * second time. The scorer of the harness runs the prover inside the score,
+ * and the two must not wait for each other.
  */
-if (!acquireLock()) {
+const inheritedOwner = inheritedLockOwner();
+
+if (inheritedOwner !== null) {
+  lockOwnerPid = inheritedOwner;
+} else {
+  if (!acquireLock()) {
+    console.error(
+      `prove: another run holds the lock of this tree and did not finish within ${lockWaitMs} ms: ${describeLockHolder()}`,
+    );
+    process.exit(1);
+  }
+  lockOwnerPid = process.pid;
+}
+
+recoverStaleProbes();
+
+if (!Number.isInteger(minimumProofs) || minimumProofs < 1) {
+  console.error(`prove: ${configPath} must set minimumProofs to a whole number of at least 1`);
+  process.exit(1);
+}
+
+if (minimumProofs !== EXPECTED_PROOF_NAMES.length) {
   console.error(
-    `prove: another run holds the lock of this tree and did not finish within ${lockWaitMs} ms`,
+    `prove: minimumProofs is ${minimumProofs}, the harness holds ${EXPECTED_PROOF_NAMES.length} proof cases`,
   );
   process.exit(1);
 }
 
-recoverStaleProbes();
+const names = proofs.map((proof) => proof.name);
+const nameCounts = new Map();
+for (const name of names) nameCounts.set(name, (nameCounts.get(name) ?? 0) + 1);
+
+const missingNames = EXPECTED_PROOF_NAMES.filter((name) => !nameCounts.has(name));
+const unexpectedNames = names.filter((name) => !EXPECTED_PROOF_NAMES.includes(name));
+const duplicatedNames = [...nameCounts.entries()]
+  .filter(([, count]) => count > 1)
+  .map(([name]) => name);
+
+if (missingNames.length > 0 || unexpectedNames.length > 0 || duplicatedNames.length > 0) {
+  console.error("prove: the proof set does not hold the cases the harness holds");
+  if (missingNames.length > 0) console.error(`  missing: ${missingNames.join(", ")}`);
+  if (unexpectedNames.length > 0) console.error(`  unexpected: ${unexpectedNames.join(", ")}`);
+  if (duplicatedNames.length > 0) console.error(`  duplicated: ${duplicatedNames.join(", ")}`);
+  process.exit(1);
+}
+
+if (proofs.length < minimumProofs) {
+  console.error(
+    `prove: the proof set holds ${proofs.length} cases, at least ${minimumProofs} are required`,
+  );
+  process.exit(1);
+}
+
+function expand(text, probe) {
+  return String(text)
+    .replaceAll("${PM}", packageManager)
+    .replaceAll("${PM_EXEC}", execCommand)
+    .replaceAll("${DATA_ALIAS}", alias)
+    .replaceAll("${PROOF_COUNT}", String(EXPECTED_PROOF_NAMES.length))
+    .replaceAll("${TREE_ROOT}", root)
+    .replaceAll("${TREE_HASH}", treeHash)
+    .replaceAll("${PROBE}", probe ?? "");
+}
+
+/**
+ * The checker runs in a child process without blocking the event loop. A
+ * blocking call would swallow the interrupt that stops this script, which is
+ * the one signal the operator can always send.
+ */
+let runningChild = null;
+
+function run(command, probe) {
+  return new Promise((resolve) => {
+    const child = spawn(expand(command, probe), {
+      shell: true,
+      cwd: root,
+      stdio: ["ignore", "pipe", "pipe"],
+      env: {
+        ...process.env,
+        // The children of this run run against the same tree, so they are
+        // told that the tree is owned and must not take the lock again.
+        HARNESS_TREE_LOCK_OWNER: String(lockOwnerPid ?? process.pid),
+      },
+    });
+    runningChild = child;
+
+    let output = "";
+    child.stdout.on("data", (chunk) => {
+      output += chunk;
+    });
+    child.stderr.on("data", (chunk) => {
+      output += chunk;
+    });
+    child.on("error", (error) => {
+      if (runningChild === child) runningChild = null;
+      resolve({ code: 1, output: `${output}${error.message}`.trim() });
+    });
+    child.on("close", (code) => {
+      if (runningChild === child) runningChild = null;
+      resolve({ code: typeof code === "number" ? code : 1, output: output.trim() });
+    });
+  });
+}
+
+function directoriesFor(file) {
+  const missing = [];
+  // A path outside the tree has its directories already, and the tree must
+  // not grow a directory for it.
+  if (path.isAbsolute(file)) return missing;
+  let current = path.dirname(path.join(root, file));
+  while (current.startsWith(root) && !existsSync(current)) {
+    missing.push(current);
+    current = path.dirname(current);
+  }
+  return missing.reverse();
+}
 
 for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) {
   process.on(signal, () => onSignal(signal));
@@ -479,14 +608,18 @@ for (const proof of proofs) {
 
   try {
     for (const write of writes) {
-      const target = path.join(root, write.path);
+      // A write path is inside the tree unless it names an absolute path. The
+      // journal of a killed run lives outside the tree, and a case has to be
+      // able to write one to prove that the next run repairs the tree.
+      const writePath = expand(write.path, write.path);
+      const target = path.isAbsolute(writePath) ? writePath : path.join(root, writePath);
       const existed = existsSync(target);
       pendingFiles.push({
         path: target,
         existed,
         content: existed ? readFileSync(target, "utf8") : "",
       });
-      for (const directory of directoriesFor(write.path)) {
+      for (const directory of directoriesFor(writePath)) {
         mkdirSync(directory, { recursive: true });
         pendingDirectories.add(directory);
       }

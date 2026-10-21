@@ -7,20 +7,54 @@
  * passes, and it prints the reason for every failure.
  *
  * A criterion never checks for a word. A check either runs the thing it
- * describes, or it reads a structure that a change could actually break: the
+ * describes, or it reads a structure a change could actually break: the
  * resolved ESLint configuration, the shape of a workflow file, the sections of
- * a procedure, the rows of a log. A file that keeps the words of a rule while
- * losing the rule fails the check.
+ * a procedure, the rows of a log, the artifact a build produced. A file that
+ * keeps the words of a rule while losing the rule fails the check.
+ *
+ * The scorer owns the tree while it runs. It takes an exclusive lock before it
+ * touches anything, so a score and a proof run on one tree cannot interleave
+ * and read a tree that a probe has half replaced. The lock lives outside the
+ * tree, so a run that was killed outright never leaves it in the repository,
+ * and a lock whose owner is gone is broken by the next run.
+ *
+ * The scorer writes probe files into the tree to run the linter, and it leaves
+ * the tree exactly as it found it, on every exit path: a normal run, a thrown
+ * error, an interrupt, a termination. A run that was killed outright cannot
+ * clean up after itself, so it leaves a journal outside the tree, and the next
+ * run restores the tree from that journal before it writes anything of its own.
+ *
+ * The criteria the harness holds live in this file, not only in
+ * `harness.config.json`, so that editing the config alone cannot weaken the
+ * gate: a criterion that is deleted, renamed or duplicated fails the score, and
+ * a command criterion that stops running the command it is supposed to run
+ * fails the score too. The proof names live here as well, and the scorer
+ * proves that the prover holds the same set.
  *
  * `node scripts/harness-score.mjs --only <criterion>` scores one criterion.
- * The proof cases use that mode, so a proof case can prove that a criterion
- * fails when the thing it guards breaks.
+ * `--only coverage` and `--only proof-set` score the gates that are not
+ * criteria of their own.
  */
 
-import { execSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { spawn } from "node:child_process";
+import { createHash } from "node:crypto";
+import {
+  closeSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  openSync,
+  readFileSync,
+  readdirSync,
+  renameSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
+import os from "node:os";
 import path from "node:path";
+import { tmpdir } from "node:os";
+import { fileURLToPath } from "node:url";
 
 import { ESLint } from "eslint";
 import { parse as parseYamlText } from "yaml";
@@ -51,16 +85,19 @@ try {
 }
 
 const packageManager = config.packageManager ?? "pnpm";
+const execCommand = config.commands?.exec ?? `${packageManager} exec`;
 const criteria = Array.isArray(config.criteria) ? config.criteria : [];
 
 /**
- * The criteria the harness holds, and the command each one runs. The list
- * lives in this file, not only in `harness.config.json`, so that editing the
- * config alone cannot weaken the gate: a criterion that is deleted, renamed or
- * duplicated fails the score, and a command criterion that stops running the
- * command it is supposed to run fails the score too.
+ * The criteria the harness holds, and the command each one runs.
  *
- * Adding a criterion is allowed. It is a deliberate act of editing this list.
+ * The list lives in this file, not only in `harness.config.json`, so that
+ * editing the config alone cannot weaken the gate: a criterion that is
+ * deleted, renamed or duplicated fails the score, and a command criterion that
+ * stops running the command it is supposed to run fails the score too.
+ *
+ * Adding a criterion is allowed. It is a deliberate act of editing this list
+ * and of raising `minimumCriteria` in the config in the same commit.
  */
 const EXPECTED_CRITERIA = {
   boundaries: { run: "${PM} arch" },
@@ -73,9 +110,88 @@ const EXPECTED_CRITERIA = {
   ratchet: {},
   "mistake-log": {},
   verify: { run: "${PM} verify" },
+  behavioral: { run: "${PM} test:e2e" },
+  artifact: { build: "${PM} build" },
+  "second-toolchain": { run: "cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml" },
 };
 
 const EXPECTED_CRITERION_IDS = Object.keys(EXPECTED_CRITERIA);
+
+/**
+ * The proof cases the harness holds.
+ *
+ * The list lives in this file and in `scripts/prove-guardrails.mjs`, so that
+ * editing `harness.config.json` alone cannot weaken the gate. The two files
+ * must hold the same names, and the scorer reads the prover to prove it.
+ */
+const EXPECTED_PROOF_NAMES = [
+  "a color literal inside the token package is allowed",
+  "a component hardcodes a Tailwind default-palette utility",
+  "a component hardcodes a bare channel triplet",
+  "a component hardcodes a color",
+  "a component hardcodes a modern color function",
+  "a component hardcodes a named color",
+  "a content change that loses the caret is caught",
+  "a file reaches a state tier with a computed import",
+  "a file reaches a state tier with a computed require",
+  "a file with no state tier owns a computed import",
+  "a stylesheet outside the old scan bounds is scanned",
+  "a workspace package imports the Tauri API",
+  "a workspace package imports the desktop app",
+  "a workspace package imports the desktop app by its package name",
+  "a workspace package reaches the desktop app with a computed import",
+  "a workspace package reaches the desktop app with a dynamic import",
+  "a workspace package reaches the desktop app with a template import",
+  "a workspace package reaches the desktop app with require",
+  "one file imports two state tiers",
+  "the AI bridge never hands the key back",
+  "the AI store holds no key material",
+  "the active line case fails when the active line is not painted",
+  "the artifact criterion fails when the build output misses the source",
+  "the behavioral criterion fails when the end to end command only prints",
+  "the browser stub keeps no key material",
+  "the ci criterion fails when the verify step is commented out",
+  "the ci criterion fails when the verify step only echoes the command",
+  "the ci criterion fails when the verify step swallows the failure",
+  "the ci criterion fails when the workflow stops running the end to end suite",
+  "the ci criterion fails when the workflow stops running the harness",
+  "the command registry that grew an action without a spy for it is caught",
+  "the coverage criterion fails when a criterion is deleted and another is duplicated",
+  "the delete confirmation of a dirty file is caught",
+  "the dialog permission lives in a capability of its own",
+  "the entry point criterion fails when a rule names an unrelated path",
+  "the entry point criterion fails when the browser smoke spec is gutted",
+  "the entry point criterion fails when the compiler options lose their strictness",
+  "the error of the AI client carries no key",
+  "the error of the AI client keeps the key out of the tree",
+  "the escape hatch criterion fails when the rules are switched off",
+  "the extensions prop that is dropped after the mount is caught",
+  "the harness fails when a command criterion runs a no-op",
+  "the harness fails when it takes longer than the ceiling",
+  "the local gate criterion fails when the hook commands lose their run lines",
+  "the local gate criterion fails when the lint command is only a comment",
+  "the mistake log criterion fails when the rows are deleted",
+  "the next run restores the probe file of a run that was killed",
+  "the prover fails when a proof case is deleted and another is duplicated",
+  "the prover refuses a second run while the lock is held",
+  "the ratchet criterion fails when the procedure is deleted",
+  "the scorer refuses a second run while the tree lock is held",
+  "the second toolchain criterion fails when the rust gate only prints",
+  "the shell content padding that leaves eight pixels is caught",
+  "the source tree carries a skipped test",
+  "the source tree carries a ts-expect-error",
+  "the source tree carries an inline lint config",
+  "the source tree parses raw JSON",
+  "the store test that skips the reset is caught",
+  "the tailwind build scans the shared ui package",
+  "the theme cascade of the editor settings is caught",
+  "the webview bundle reads a key from the environment",
+  "the webview logs a key",
+  "the webview stores a key in browser storage",
+  "the workspace ui alias resolves to its entry point",
+];
+
+const GATE_NAMES = ["coverage", "proof-set", "runtime"];
 
 /**
  * A command that exits 0 without proving anything. A criterion that runs one
@@ -88,8 +204,6 @@ const NOOP_COMMANDS = new Set([
   "0",
   "exit 0",
   "exit 1",
-  "echo",
-  "echo hit",
   "noop",
   "nothing",
   "yes",
@@ -100,36 +214,463 @@ function isNoopCommand(command) {
   if (trimmed === "") return true;
   if (NOOP_COMMANDS.has(trimmed)) return true;
   if (NOOP_COMMANDS.has(trimmed.toLowerCase())) return true;
+  if (/^echo\b/.test(trimmed)) return true;
+  if (/(\|\|\s*true|;\s*true)\s*$/.test(trimmed)) return true;
   return false;
+}
+
+/**
+ * The body of the package script a command runs, when the command runs one.
+ *
+ * A script whose body only prints is not the command it is named after, so the
+ * body is read before the command is run.
+ */
+function packageScriptBody(command) {
+  const match = String(command)
+    .trim()
+    .match(/^(?:npm|pnpm|yarn|bun)\s+(?:run\s+)?([A-Za-z0-9:._-]+)\s*$/);
+  if (!match) return null;
+
+  const name = match[1];
+  let manifest;
+  try {
+    manifest = JSON.parse(readFileSync(path.join(root, "package.json"), "utf8"));
+  } catch {
+    return null;
+  }
+
+  const body = manifest.scripts?.[name];
+  if (typeof body !== "string") return null;
+  return { name, body };
+}
+
+/**
+ * True when every part of a script body proves nothing. A body of
+ * `echo everything is fine` is a no-op however it is written.
+ */
+function isNoopBody(body) {
+  const parts = String(body)
+    .split(/&&|\|\||;/)
+    .map((part) => part.trim())
+    .filter((part) => part !== "");
+  if (parts.length === 0) return true;
+  return parts.every((part) => isNoopCommand(part));
 }
 
 function expand(text) {
   return String(text)
     .replaceAll("${PM}", packageManager)
-    .replaceAll("${DATA_ALIAS}", config.layers?.data?.alias ?? "@/db");
+    .replaceAll("${PM_EXEC}", execCommand)
+    .replaceAll("${DATA_ALIAS}", config.layers?.data?.alias ?? "@/db")
+    .replaceAll("${PROOF_COUNT}", String(EXPECTED_PROOF_NAMES.length))
+    .replaceAll("${TREE_LOCK_PATH}", lockPath)
+    .replaceAll("${OWNER_PID}", String(lockOwnerPid ?? ""));
 }
 
-function run(command) {
+/**
+ * The tree discipline.
+ *
+ * The scorer writes probe files into the tree to run the linter. The tree must
+ * be left exactly as it was found, on every exit path. The journal holds the
+ * state of the files the scorer is about to overwrite, and it lives outside the
+ * tree, so a run that was killed outright still leaves a record that the next
+ * run restores.
+ */
+const treeHash = createHash("sha256").update(root).digest("hex").slice(0, 12);
+
+/**
+ * The lock of the tree.
+ *
+ * A score and a proof run on one tree fight over the same probe files, and the
+ * loser reads a tree that the winner has half replaced, which is how a
+ * concurrent run scores a false seven of ten. The lock makes the tree the
+ * resource of one run: the second run waits for the first to finish and
+ * refuses when the wait runs out.
+ *
+ * The lock lives outside the tree, so a run that was killed outright cannot
+ * leave it in the repository. A lock whose owner is gone is broken, so a
+ * killed run never blocks the next one.
+ *
+ * The lock is shared with the prover. The scorer runs the prover inside the
+ * score, so the child prover is told that the tree is already owned and does
+ * not take the lock a second time.
+ */
+function treePath(kind) {
+  const override = process.env[`HARNESS_${kind}_PATH`];
+  if (override) {
+    return path.isAbsolute(override) ? override : path.join(root, override);
+  }
+  return path.join(os.tmpdir(), `arrow-harness-tree-${kind}-${treeHash}.${kind}`);
+}
+
+const lockPath = treePath("lock");
+
+/**
+ * The journal of the run.
+ *
+ * The name of the journal holds the pid of the run that wrote it, so two runs
+ * that are killed in the same tree leave two journals and neither of them
+ * loses the record of the other. The next run restores every journal of the
+ * tree and removes them.
+ */
+const journalPrefix = `arrow-harness-tree-journal-${treeHash}-`;
+const journalPath = path.join(os.tmpdir(), `${journalPrefix}${process.pid}.json`);
+
+/**
+ * The journals of this tree that a killed run left behind.
+ *
+ * The prover keeps its own journal, and a killed proof run leaves probe files
+ * in the tree too. The scorer owns the tree while it runs, so it repairs both
+ * kinds of journal before it reads a single file. The journal of a run that
+ * is still alive belongs to that run, and it is left alone.
+ */
+function journalPaths() {
+  const prefixes = [journalPrefix, `arrow-prove-journal-${treeHash}-`];
+  let names = [];
   try {
-    const stdout = execSync(expand(command), {
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "pipe"],
-      cwd: root,
-    });
-    return { code: 0, output: stdout };
+    names = readdirSync(os.tmpdir());
+  } catch {
+    return [];
+  }
+  return (
+    names
+      .filter(
+        (name) => name.endsWith(".json") && prefixes.some((prefix) => name.startsWith(prefix)),
+      )
+      .filter((name) => !journalOwnerIsAlive(name))
+      .map((name) => path.join(os.tmpdir(), name))
+      // The newest journal first. Every journal holds the state of the tree
+      // before its own run wrote to it, so the newest journal undoes the
+      // newest run, and the one before it undoes the run before that. The
+      // other order leaves the file of a run that a later run found on the
+      // tree, and the tree stays dirty.
+      .sort((a, b) => statSync(b).mtimeMs - statSync(a).mtimeMs)
+  );
+}
+
+/**
+ * True when the run that wrote the journal is still alive.
+ */
+function journalOwnerIsAlive(name) {
+  const match = name.match(/-(\d+)\.json$/);
+  if (!match) return false;
+  const pid = Number(match[1]);
+  try {
+    process.kill(pid, 0);
+    return true;
   } catch (error) {
-    const output = `${error.stdout ?? ""}${error.stderr ?? ""}`.trim();
-    return {
-      code: typeof error.status === "number" ? error.status : 1,
-      output,
-    };
+    return error.code !== "ESRCH";
   }
 }
 
-function tail(text, lines = 4) {
+/** The milliseconds a run waits for the lock before it refuses to run. */
+const lockWaitMs = Number(process.env.HARNESS_LOCK_WAIT_MS ?? 30_000);
+
+/** The milliseconds after which a lock without a readable owner is stale. */
+const lockStaleMs = Number(process.env.HARNESS_LOCK_STALE_MS ?? 60_000);
+
+/** The milliseconds a single command of the harness may run. */
+const commandTimeoutMs = Number(process.env.HARNESS_COMMAND_TIMEOUT_MS ?? 1_800_000);
+
+/** Sleeps without blocking the event loop for longer than it has to. */
+function sleep(ms) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+/**
+ * The pid that already owns the lock of this tree, when an ancestor of this
+ * process owns it. A run that is started by a run that owns the tree does not
+ * take the lock a second time, and the two do not wait for each other.
+ */
+function inheritedLockOwner() {
+  // A run that names a lock of its own must take that lock, even when an
+  // ancestor owns the tree. A case that proves the refusal of a second run
+  // names the lock on purpose.
+  if (process.env.HARNESS_LOCK_PATH) return null;
+  const raw = process.env.HARNESS_TREE_LOCK_OWNER;
+  if (!raw) return null;
+  const pid = Number(raw);
+  if (!Number.isInteger(pid) || pid <= 0) return null;
+  try {
+    process.kill(pid, 0);
+    return pid;
+  } catch (error) {
+    return error.code === "ESRCH" ? null : pid;
+  }
+}
+
+/**
+ * True when the lock belongs to a process that is gone.
+ */
+function lockOwnerIsGone() {
+  let holder;
+  try {
+    holder = JSON.parse(readFileSync(lockPath, "utf8"));
+  } catch {
+    try {
+      return Date.now() - statSync(lockPath).mtimeMs > lockStaleMs;
+    } catch {
+      return true;
+    }
+  }
+
+  if (typeof holder?.pid !== "number") return false;
+  try {
+    process.kill(holder.pid, 0);
+    return false;
+  } catch (error) {
+    return error.code === "ESRCH";
+  }
+}
+
+/**
+ * The name of the run that holds the lock, and how long it has held it.
+ */
+function describeLockHolder() {
+  try {
+    const holder = JSON.parse(readFileSync(lockPath, "utf8"));
+    if (typeof holder.startedAt !== "number" || holder.startedAt <= 0) {
+      return `the run with the pid ${holder.pid}, which has held the lock for an unknown time`;
+    }
+    const seconds = Math.max(0, Math.round((Date.now() - holder.startedAt) / 1000));
+    return `the run with the pid ${holder.pid}, which has held the lock for ${seconds} seconds`;
+  } catch {
+    return "a run whose holder cannot be read";
+  }
+}
+
+/**
+ * Takes the lock of the tree.
+ */
+function acquireLock() {
+  const deadline = Date.now() + lockWaitMs;
+
+  for (;;) {
+    try {
+      const handle = openSync(lockPath, "wx");
+      try {
+        writeFileSync(handle, JSON.stringify({ pid: process.pid, startedAt: Date.now() }));
+      } finally {
+        closeSync(handle);
+      }
+      return true;
+    } catch (error) {
+      if (error.code !== "EEXIST") throw error;
+    }
+
+    if (lockOwnerIsGone()) {
+      const stalePath = `${lockPath}.stale-${process.pid}-${Date.now()}`;
+      try {
+        renameSync(lockPath, stalePath);
+        rmSync(stalePath, { force: true });
+      } catch {
+        // Another run broke the same lock first. It holds it now.
+      }
+      continue;
+    }
+
+    if (Date.now() >= deadline) return false;
+    sleep(250);
+  }
+}
+
+/**
+ * Releases the lock of the run. Only the owner releases it.
+ */
+function releaseLock() {
+  try {
+    const holder = JSON.parse(readFileSync(lockPath, "utf8"));
+    if (holder?.pid !== process.pid) return;
+  } catch {
+    return;
+  }
+  rmSync(lockPath, { force: true });
+}
+
+let pendingFiles = [];
+let pendingDirectories = new Set();
+let journalWritten = false;
+
+/** The pid that owns the lock of the tree while this run runs. */
+let lockOwnerPid = null;
+
+function writeJournal() {
+  try {
+    writeFileSync(journalPath, JSON.stringify({ root, pendingFiles }, null, 2));
+    journalWritten = true;
+  } catch {
+    // The journal is a backup for a run that cannot clean up after itself. A
+    // failure to write it must not stop the run.
+  }
+}
+
+/**
+ * Restores every file the scorer touched and removes every directory it made.
+ * It is safe to call twice, and it is called on every exit path.
+ */
+function restoreTree() {
+  for (const entry of [...pendingFiles].reverse()) {
+    try {
+      if (entry.existed) writeFileSync(entry.path, entry.content);
+      else rmSync(entry.path, { force: true });
+    } catch (error) {
+      console.error(`harness: could not restore ${entry.path}: ${error.message}`);
+    }
+  }
+  pendingFiles = [];
+
+  for (const directory of [...pendingDirectories].reverse()) {
+    rmSync(directory, { recursive: true, force: true });
+  }
+  pendingDirectories.clear();
+
+  // The journal belongs to the run that wrote it. A run that never wrote one
+  // must not remove the journal of the run that holds the tree.
+  if (!journalWritten) return;
+  journalWritten = false;
+  rmSync(journalPath, { force: true });
+}
+
+/**
+ * A run that was killed outright cannot clean up after itself. The journal it
+ * left behind holds the content of every file it overwrote, so the next run
+ * puts the tree back before it writes anything of its own.
+ */
+function recoverStaleProbes() {
+  for (const file of journalPaths()) {
+    try {
+      const stale = JSON.parse(readFileSync(file, "utf8"));
+      if (stale.root === root && Array.isArray(stale.pendingFiles)) {
+        for (const entry of stale.pendingFiles) {
+          if (entry.existed) writeFileSync(entry.path, entry.content);
+          else rmSync(entry.path, { force: true });
+        }
+        console.log(
+          `harness: restored ${stale.pendingFiles.length} probe file(s) left behind by an earlier run`,
+        );
+      }
+    } catch (error) {
+      console.error(`harness: could not read the probe journal: ${error.message}`);
+    }
+
+    rmSync(file, { force: true });
+  }
+}
+
+/**
+ * The checker runs in a child process without blocking the event loop. A
+ * blocking call would swallow the interrupt that stops this script, which is
+ * the one signal the operator can always send.
+ */
+let runningChild = null;
+
+function run(command, options = {}) {
+  return new Promise((resolve) => {
+    const child = spawn(expand(command), {
+      shell: true,
+      cwd: options.cwd ?? root,
+      stdio: ["ignore", "pipe", "pipe"],
+      env: {
+        ...process.env,
+        HARNESS_TREE_LOCK_OWNER: String(lockOwnerPid ?? process.pid),
+        ...options.env,
+      },
+    });
+    runningChild = child;
+
+    let output = "";
+    let settled = false;
+    const finish = (code, extra = "") => {
+      if (settled) return;
+      settled = true;
+      if (runningChild === child) runningChild = null;
+      resolve({ code, output: `${output}${extra}`.trim() });
+    };
+
+    const timer = setTimeout(() => {
+      child.kill("SIGKILL");
+      finish(124, `\nharness: the command \`${command}\` was killed after ${commandTimeoutMs} ms`);
+    }, commandTimeoutMs);
+
+    child.stdout.on("data", (chunk) => {
+      output += chunk;
+    });
+    child.stderr.on("data", (chunk) => {
+      output += chunk;
+    });
+    child.on("error", (error) => {
+      clearTimeout(timer);
+      finish(1, error.message);
+    });
+    child.on("close", (code) => {
+      clearTimeout(timer);
+      finish(typeof code === "number" ? code : 1);
+    });
+  });
+}
+
+function tail(text, lines = 6) {
   const rows = String(text).trim().split("\n");
   return rows.slice(-lines).join("\n");
 }
+
+function onSignal(signal) {
+  if (runningChild) {
+    runningChild.kill("SIGKILL");
+    runningChild = null;
+  }
+  restoreTree();
+  releaseLock();
+  console.error(`\nharness: ${signal} received, the tree was restored`);
+  process.exit(128 + (os.constants.signals[signal] ?? 0));
+}
+
+/**
+ * The run owns the tree before it touches it.
+ *
+ * The lock is taken before the stale probes are repaired, so two runs can never
+ * repair the same probe at the same time.
+ */
+const inheritedOwner = inheritedLockOwner();
+
+if (inheritedOwner !== null) {
+  // An ancestor of this run owns the tree. The run does not take the lock a
+  // second time, and the two do not wait for each other.
+  lockOwnerPid = inheritedOwner;
+} else {
+  if (!acquireLock()) {
+    console.error(
+      `harness: another run holds the lock of this tree and did not finish within ${lockWaitMs} ms: ${describeLockHolder()}`,
+    );
+    process.exit(1);
+  }
+  lockOwnerPid = process.pid;
+}
+
+recoverStaleProbes();
+
+for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) {
+  process.on(signal, () => onSignal(signal));
+}
+
+process.on("exit", () => {
+  restoreTree();
+  releaseLock();
+});
+
+process.on("uncaughtException", (error) => {
+  restoreTree();
+  releaseLock();
+  console.error(error);
+  process.exit(1);
+});
+
+process.on("unhandledRejection", (error) => {
+  restoreTree();
+  releaseLock();
+  console.error(error);
+  process.exit(1);
+});
 
 /**
  * The resolved ESLint configuration of one file. The resolver reads the real
@@ -218,8 +759,8 @@ function logicalLines(text) {
 }
 
 /**
- * The commands of one line. A shell line holds several commands, split by
- * the operators that end a command. The quotes of a token are stripped, so a
+ * The commands of one line. A shell line holds several commands, split by the
+ * operators that end a command. The quotes of a token are stripped, so a
  * quoted value stays one token.
  */
 function shellCommands(line) {
@@ -312,8 +853,8 @@ function effectiveCommand(tokens) {
 
 /** True when the tokens of a command start with the tokens of the anchor. */
 function startsWithTokens(tokens, prefix) {
-  if (prefix.length === 0 || prefix.length > tokens.length) return false;
-  return prefix.every((token, index) => tokens[index] === token);
+  if (prefix.length === 0 || prefix > tokens.length) return false;
+  return prefix.every((token, index) => tokens[index] === prefix[index]);
 }
 
 /**
@@ -512,7 +1053,7 @@ async function validateEnforcement(entry) {
       if (isNoopCommand(entry.run)) {
         return `the registry entry "${entry.match}" runs \`${entry.run}\`, which proves nothing`;
       }
-      const result = run(entry.run);
+      const result = await run(entry.run);
       if (result.code !== 0) return `the command \`${expand(entry.run)}\` exited ${result.code}`;
       if (entry.contains && !result.output.includes(entry.contains)) {
         return `the command \`${expand(entry.run)}\` did not print ${entry.contains}`;
@@ -542,20 +1083,94 @@ async function validateEnforcement(entry) {
   }
 }
 
+/**
+ * The artifact a build produced, read from the path the config names. A path
+ * that holds a glob is resolved against the tree.
+ */
+function readArtifact(file) {
+  if (!file.includes("*")) {
+    const full = path.join(root, file);
+    if (!existsSync(full)) return null;
+    return readFileSync(full, "utf8");
+  }
+
+  const directory = path.join(root, path.dirname(file));
+  if (!existsSync(directory)) return null;
+  const pattern = new RegExp(
+    `^${path.basename(file).replaceAll(".", "\\.").replaceAll("*", ".*")}$`,
+  );
+  const found = readdirSync(directory)
+    .filter((name) => pattern.test(name))
+    .sort();
+  if (found.length === 0) return null;
+  return readFileSync(path.join(directory, found[0]), "utf8");
+}
+
 const checks = {
-  command(check) {
-    const result = run(check.run);
+  async command(check) {
+    const command = String(check.run ?? "");
+    if (isNoopCommand(command)) {
+      return {
+        ok: false,
+        reason: `the criterion proves nothing: \`${command.trim()}\` exits 0 without checking anything`,
+      };
+    }
+    const script = packageScriptBody(expand(command));
+    if (script && isNoopBody(script.body)) {
+      return {
+        ok: false,
+        reason: `the criterion proves nothing: the script ${script.name} only prints, it runs nothing`,
+      };
+    }
+    const result = await run(command);
     if (result.code !== 0) {
       return {
         ok: false,
-        reason: `\`${expand(check.run)}\` exited ${result.code}`,
+        reason: `\`${expand(command)}\` exited ${result.code}`,
         detail: tail(result.output),
       };
     }
     if (check.contains && !result.output.includes(check.contains)) {
       return {
         ok: false,
-        reason: `\`${expand(check.run)}\` did not print ${check.contains}`,
+        reason: `\`${expand(command)}\` did not print ${check.contains}`,
+        detail: tail(result.output),
+      };
+    }
+    return { ok: true };
+  },
+
+  /**
+   * Runs the end to end command of the repository. The app has to work when
+   * something drives it, and a command that only prints proves nothing.
+   */
+  async behavioral(check) {
+    const command = String(check.run ?? "");
+    if (isNoopCommand(command)) {
+      return {
+        ok: false,
+        reason: `the criterion proves nothing: \`${command.trim()}\` exits 0 without driving the app`,
+      };
+    }
+    const script = packageScriptBody(expand(command));
+    if (script && isNoopBody(script.body)) {
+      return {
+        ok: false,
+        reason: `the criterion proves nothing: the script ${script.name} only prints, it drives nothing`,
+      };
+    }
+    const result = await run(command);
+    if (result.code !== 0) {
+      return {
+        ok: false,
+        reason: `the end to end command \`${expand(command)}\` exited ${result.code}`,
+        detail: tail(result.output, 12),
+      };
+    }
+    if (check.contains && !result.output.includes(check.contains)) {
+      return {
+        ok: false,
+        reason: `the end to end command \`${expand(command)}\` did not print ${check.contains}`,
         detail: tail(result.output),
       };
     }
@@ -611,17 +1226,23 @@ const checks = {
     return { ok: true };
   },
 
-  node(check) {
+  async node(check) {
+    // The scratch file lives outside the tree, and it is removed when the
+    // check ends, so the check leaves nothing behind anywhere.
     const directory = mkdtempSync(path.join(tmpdir(), "harness-"));
     const file = path.join(directory, "check.mjs");
-    writeFileSync(file, check.script);
-    const result = run(`node ${file}`);
-    if (result.code !== 0) {
-      return {
-        ok: false,
-        reason: `the node check exited ${result.code}`,
-        detail: tail(result.output),
-      };
+    try {
+      writeFileSync(file, check.script);
+      const result = await run(`node ${file}`);
+      if (result.code !== 0) {
+        return {
+          ok: false,
+          reason: `the node check exited ${result.code}`,
+          detail: tail(result.output),
+        };
+      }
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
     }
     return { ok: true };
   },
@@ -678,6 +1299,67 @@ const checks = {
       return {
         ok: false,
         reason: `${problems.length} rules are not switched on`,
+        detail: problems.join("\n"),
+      };
+    }
+    return { ok: true };
+  },
+
+  /**
+   * Runs the linter against a probe file that breaks each named rule and
+   * asserts the linter failed with that rule. The probe is registered in the
+   * journal before it is written, so a run that is killed between the write
+   * and the restore leaves a record that the next run uses to put the tree
+   * back.
+   */
+  async lintRules(check) {
+    const problems = [];
+    const probes = check.rules ?? [];
+
+    if (probes.length === 0) {
+      return { ok: false, reason: "the check names no rule to prove" };
+    }
+
+    for (const probe of probes) {
+      const target = path.join(root, probe.path);
+      const existed = existsSync(target);
+      const content = existed ? readFileSync(target, "utf8") : null;
+
+      pendingFiles.push({ path: target, existed, content });
+      for (const directory of directoriesFor(probe.path)) {
+        mkdirSync(directory, { recursive: true });
+        pendingDirectories.add(directory);
+      }
+      writeJournal();
+
+      try {
+        mkdirSync(path.dirname(target), { recursive: true });
+        writeFileSync(target, probe.content ?? "");
+
+        const command = probe.run ?? check.run;
+        if (!command) {
+          problems.push(`${probe.name}: the probe names no command that runs the linter`);
+          continue;
+        }
+        const result = await run(command);
+        if (result.code === 0) {
+          problems.push(`${probe.name}: the linter exited 0 on a file that breaks ${probe.rule}`);
+          continue;
+        }
+        if (!result.output.includes(probe.rule)) {
+          problems.push(
+            `${probe.name}: the linter did not report ${probe.rule}, it reported:\n${tail(result.output, 8)}`,
+          );
+        }
+      } finally {
+        restoreTree();
+      }
+    }
+
+    if (problems.length > 0) {
+      return {
+        ok: false,
+        reason: `${problems.length} rules do not bite`,
         detail: problems.join("\n"),
       };
     }
@@ -983,7 +1665,142 @@ const checks = {
 
     return { ok: true };
   },
+
+  /**
+   * Asserts the built artifact holds what the sources imply. The build
+   * command runs first, so a stale artifact cannot pass the check.
+   */
+  async artifactContains(check) {
+    if (check.build) {
+      if (isNoopCommand(check.build)) {
+        return {
+          ok: false,
+          reason: `the criterion proves nothing: \`${check.build.trim()}\` exits 0 without building anything`,
+        };
+      }
+      const script = packageScriptBody(expand(check.build));
+      if (script && isNoopBody(script.body)) {
+        return {
+          ok: false,
+          reason: `the criterion proves nothing: the script ${script.name} only prints, it builds nothing`,
+        };
+      }
+      const built = await run(check.build);
+      if (built.code !== 0) {
+        return {
+          ok: false,
+          reason: `the build command \`${expand(check.build)}\` exited ${built.code}`,
+          detail: tail(built.output, 10),
+        };
+      }
+    }
+
+    const content = readArtifact(check.artifact);
+    if (content === null) {
+      return {
+        ok: false,
+        reason: `${check.artifact} is missing, the build did not produce it`,
+      };
+    }
+
+    const missing = (check.contains ?? []).filter((needle) => !content.includes(needle));
+    if (missing.length > 0) {
+      return {
+        ok: false,
+        reason: `${check.artifact} does not hold: ${missing.join(", ")}`,
+      };
+    }
+    return { ok: true };
+  },
+
+  /**
+   * Compares a set of names against a set the harness holds. The set lives in
+   * this file, so editing the config alone cannot weaken the gate. A missing
+   * member, a renamed member and a duplicated member all fail.
+   */
+  async exactSet(check) {
+    const set = BUILTIN_SETS[check.set];
+    if (!set) {
+      return {
+        ok: false,
+        reason: `the set ${check.set} is not one the harness holds: ${Object.keys(BUILTIN_SETS).join(", ")}`,
+      };
+    }
+
+    const members = membersOf(check.set);
+    if (members === null) return { ok: false, reason: `the set ${check.set} holds no members` };
+
+    const counts = new Map();
+    for (const member of members) counts.set(member, (counts.get(member) ?? 0) + 1);
+
+    const missing = set.filter((member) => !counts.has(member));
+    const unexpected = members.filter((member) => !set.includes(member));
+    const duplicated = [...counts.entries()]
+      .filter(([, count]) => count > 1)
+      .map(([member]) => member);
+
+    const problems = [];
+    if (missing.length > 0) problems.push(`missing: ${missing.join(", ")}`);
+    if (unexpected.length > 0) problems.push(`not one the harness holds: ${unexpected.join(", ")}`);
+    if (duplicated.length > 0) problems.push(`duplicated: ${duplicated.join(", ")}`);
+
+    if (check.set === "proofs") {
+      const floor = config.minimumProofs;
+      if (!Number.isInteger(floor) || floor < 1) {
+        problems.push(`minimumProofs is ${floor}, it must be a whole number of at least 1`);
+      } else if (floor !== set.length) {
+        problems.push(`minimumProofs is ${floor}, the harness holds ${set.length} proof cases`);
+      }
+    }
+
+    if (problems.length > 0) {
+      return {
+        ok: false,
+        reason: `the ${check.set} set does not hold what the harness holds`,
+        detail: problems.join("\n"),
+      };
+    }
+
+    if (check.run) {
+      const result = await run(check.run, { env: check.env });
+      if (result.code !== 0) {
+        return {
+          ok: false,
+          reason: `\`${expand(check.run)}\` exited ${result.code}`,
+          detail: tail(result.output, 20),
+        };
+      }
+      if (check.contains && !result.output.includes(check.contains)) {
+        return {
+          ok: false,
+          reason: `\`${expand(check.run)}\` did not print ${check.contains}`,
+          detail: tail(result.output, 20),
+        };
+      }
+    }
+
+    return { ok: true };
+  },
 };
+
+/**
+ * The sets the harness holds. A set lives in this file, so the config alone
+ * cannot change it.
+ */
+const BUILTIN_SETS = {
+  criteria: EXPECTED_CRITERION_IDS,
+  proofs: EXPECTED_PROOF_NAMES,
+};
+
+function membersOf(set) {
+  if (set === "criteria") {
+    return criteria.map((criterion) => criterion.id ?? criterion.check?.type ?? "criterion");
+  }
+  if (set === "proofs") {
+    return (config.proofs ?? []).map((proof) => proof.name);
+  }
+  return null;
+}
 
 /**
  * True when a token in a table cell names a file. A rule name such as
@@ -996,11 +1813,24 @@ function looksLikePath(token) {
   return /\.[A-Za-z0-9]+$/.test(token);
 }
 
+/**
+ * The directories a file needs, in the order they have to be made.
+ */
+function directoriesFor(file) {
+  const missing = [];
+  let current = path.dirname(path.join(root, file));
+  while (current.startsWith(root) && !existsSync(current)) {
+    missing.push(current);
+    current = path.dirname(current);
+  }
+  return missing.reverse();
+}
+
 const selected = only
   ? criteria.filter((criterion) => (criterion.id ?? criterion.check?.type) === only)
   : criteria;
 
-if (only && selected.length === 0) {
+if (only && selected.length === 0 && !GATE_NAMES.includes(only)) {
   die(`no criterion is named ${only}`);
 }
 
@@ -1022,7 +1852,8 @@ function definitionProblems(criterion) {
   }
 
   const check = criterion.check ?? {};
-  if (check.type === "command") {
+
+  if (check.type === "command" || check.type === "behavioral" || check.type === "exactSet") {
     const command = String(check.run ?? "").trim();
     if (command === "") {
       problems.push(`${id} runs nothing`);
@@ -1034,11 +1865,25 @@ function definitionProblems(criterion) {
     }
   }
 
+  if (check.type === "artifactContains") {
+    const build = String(check.build ?? "").trim();
+    if (build === "") {
+      problems.push(`${id} builds nothing`);
+    } else if (isNoopCommand(build)) {
+      problems.push(`${id} builds \`${build}\`, which exits 0 and proves nothing`);
+    }
+    if (expected.build !== undefined && expand(build) !== expand(expected.build)) {
+      problems.push(`${id} builds \`${build}\`, the harness expects \`${expand(expected.build)}\``);
+    }
+  }
+
   return problems;
 }
 
 let passed = 0;
 let failed = 0;
+
+const startedAt = process.hrtime.bigint();
 
 for (const criterion of selected) {
   const check = criterion.check ?? {};
@@ -1080,7 +1925,12 @@ for (const criterion of selected) {
   failed += 1;
 }
 
-const minimum = config.minimumCriteria ?? 10;
+/**
+ * The criteria list is a set, not a count. A criterion that is deleted,
+ * renamed or duplicated fails the score, and the floor in the config must
+ * match the set the harness holds, so that lowering the floor does not make a
+ * broken score look clean.
+ */
 const ids = criteria.map((criterion) => criterion.id ?? criterion.check?.type ?? "criterion");
 const counts = new Map();
 for (const id of ids) counts.set(id, (counts.get(id) ?? 0) + 1);
@@ -1089,25 +1939,27 @@ const missing = EXPECTED_CRITERION_IDS.filter((id) => !counts.has(id));
 const unexpected = ids.filter((id) => !EXPECTED_CRITERION_IDS.includes(id));
 const duplicated = [...counts.entries()].filter(([, count]) => count > 1).map(([id]) => id);
 
+const minimum = config.minimumCriteria ?? EXPECTED_CRITERION_IDS.length;
 const coverage = [];
 if (missing.length > 0) coverage.push(`the criteria ${missing.join(", ")} are missing`);
 if (unexpected.length > 0) {
   coverage.push(`the criteria ${unexpected.join(", ")} are not one the harness holds`);
 }
-if (duplicated.length > 0) {
+if (duplicated.length > 0)
   coverage.push(`the criteria ${duplicated.join(", ")} appear more than once`);
-}
 if (minimum !== EXPECTED_CRITERION_IDS.length) {
   coverage.push(
     `minimumCriteria is ${minimum}, the harness holds ${EXPECTED_CRITERION_IDS.length} criteria`,
   );
 }
-if (criteria.length < minimum) {
-  coverage.push(`the harness scores ${criteria.length} criteria, ${minimum} are required`);
+if (criteria.length !== EXPECTED_CRITERION_IDS.length) {
+  coverage.push(
+    `the harness scores ${criteria.length} criteria, the harness holds ${EXPECTED_CRITERION_IDS.length}`,
+  );
 }
 
 if (coverage.length > 0) {
-  console.log(`FAIL  coverage  the harness scores the criteria it must hold`);
+  console.log("FAIL  coverage  the harness scores the criteria it must hold");
   for (const problem of coverage) console.log(`      ${problem}`);
   failed += 1;
 } else {
@@ -1116,11 +1968,84 @@ if (coverage.length > 0) {
   console.log(`PASS  coverage  the harness scores ${criteria.length} criteria`);
 }
 
+/**
+ * The scorer and the prover must hold the same proof set, and the floor on
+ * the proof set must match it, or one of them holds a gate the other does
+ * not.
+ */
+{
+  const proverPath = path.join(
+    path.dirname(fileURLToPath(import.meta.url)),
+    "prove-guardrails.mjs",
+  );
+  const problems = [];
+
+  if (!existsSync(proverPath)) {
+    problems.push("the prover is missing, scripts/prove-guardrails.mjs must hold the proof set");
+  } else {
+    const proverSource = readFileSync(proverPath, "utf8");
+    const drift = EXPECTED_PROOF_NAMES.filter((name) => !proverSource.includes(`"${name}"`));
+    if (drift.length > 0) {
+      problems.push(
+        `the prover does not hold: ${drift.join(", ")}. Both files must hold the same proof set.`,
+      );
+    }
+  }
+
+  const floor = config.minimumProofs;
+  if (!Number.isInteger(floor) || floor < 1) {
+    problems.push(`minimumProofs is ${floor}, it must be a whole number of at least 1`);
+  } else if (floor !== EXPECTED_PROOF_NAMES.length) {
+    problems.push(
+      `minimumProofs is ${floor}, the harness holds ${EXPECTED_PROOF_NAMES.length} proof cases`,
+    );
+  }
+
+  const configured = (config.proofs ?? []).map((proof) => proof.name);
+  const configuredCounts = new Map();
+  for (const name of configured) configuredCounts.set(name, (configuredCounts.get(name) ?? 0) + 1);
+  const configMissing = EXPECTED_PROOF_NAMES.filter((name) => !configuredCounts.has(name));
+  const configUnexpected = configured.filter((name) => !EXPECTED_PROOF_NAMES.includes(name));
+  const configDuplicated = [...configuredCounts.entries()]
+    .filter(([, count]) => count > 1)
+    .map(([name]) => name);
+  const setProblems = [];
+  if (configMissing.length > 0) setProblems.push(`missing: ${configMissing.join(", ")}`);
+  if (configUnexpected.length > 0) {
+    setProblems.push(`not one the harness holds: ${configUnexpected.join(", ")}`);
+  }
+  if (configDuplicated.length > 0) {
+    setProblems.push(`duplicated: ${configDuplicated.join(", ")}`);
+  }
+  if (setProblems.length > 0) {
+    problems.push("the proofs set does not hold what the harness holds");
+    for (const problem of setProblems) problems.push(problem);
+  }
+
+  if (problems.length > 0) {
+    console.log("FAIL  proof-set  the scorer and the prover disagree");
+    for (const problem of problems) console.log(`      ${problem}`);
+    failed += 1;
+  } else {
+    console.log(
+      `PASS  proof-set  the scorer and the prover hold the same set of ${EXPECTED_PROOF_NAMES.length} proofs`,
+    );
+  }
+}
+
+const seconds = Number(process.hrtime.bigint() - startedAt) / 1e9;
+const ceiling = config.maxHarnessSeconds ?? 1800;
+console.log(`harness: ${seconds.toFixed(1)}s runtime, the ceiling is ${ceiling}s`);
+if (seconds > ceiling) {
+  console.log(`FAIL  runtime  the harness took ${seconds.toFixed(1)}s, the ceiling is ${ceiling}s`);
+  failed += 1;
+}
+
 if (Array.isArray(config.notes) && config.notes.length > 0 && !only) {
   console.log("\nharness notes:");
   for (const note of config.notes) console.log(`  - ${note}`);
 }
 
-console.log(`\nharness: ${passed}/${selected.length} criteria passed, ${failed} failed`);
+console.log(`\nharness: ${passed} passed, ${failed} failed`);
 
 if (failed > 0) process.exit(1);
