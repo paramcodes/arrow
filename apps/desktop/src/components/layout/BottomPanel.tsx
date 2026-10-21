@@ -1,23 +1,21 @@
-import { ScrollArea } from "@arrow/ui";
+import { useLayoutStore } from "../../stores/layout";
+import { TerminalManager } from "../terminal/TerminalManager";
 
 /**
  * The bottom panel of the shell.
  *
- * The panel holds the terminal and the output of the last run. The terminal
- * itself lands in a later session, so the panel shows the empty state of the
- * terminal.
+ * The panel holds the integrated terminal. It mounts the terminal manager
+ * once and never unmounts it, so closing the panel hides the terminals
+ * instead of killing the shells. The panel reads its own visibility from the
+ * layout store, because the manager only starts a session when the panel is
+ * actually on screen.
  */
 export function BottomPanel() {
+  const bottomPanelOpen = useLayoutStore((state) => state.bottomPanelOpen);
+
   return (
     <div className="flex h-full min-h-0 flex-col bg-canvas-soft" data-testid="bottom-panel">
-      <header className="flex h-7 shrink-0 items-center gap-4 border-b border-border px-2 text-[11px] text-ink-secondary">
-        <span className="text-ink">Terminal</span>
-      </header>
-      <ScrollArea className="min-h-0 flex-1">
-        <p className="p-2 font-mono text-xs text-ink-tertiary">
-          The terminal lands in a later session.
-        </p>
-      </ScrollArea>
+      <TerminalManager visible={bottomPanelOpen} />
     </div>
   );
 }
