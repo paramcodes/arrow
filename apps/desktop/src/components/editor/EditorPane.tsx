@@ -13,8 +13,10 @@ import { useAtomValue, useSetAtom } from "jotai";
 
 import { fileCursorAtom, type FileCursor } from "../../atoms/file";
 import { baseName } from "../../hooks/fileSystem";
+import { useAiStore } from "../../stores/ai";
 import { useEditorStore } from "../../stores/editor";
 import { useSettingsStore } from "../../stores/settings";
+import { useGhostText } from "./useGhostText";
 
 /**
  * The editor pane of one open file.
@@ -30,6 +32,11 @@ import { useSettingsStore } from "../../stores/settings";
  * The pane reads the settings of the editor, so a change of the font size, the
  * family, the width of a tab or the wrapping of long lines repaints the open
  * document while the reader is still in the settings dialog.
+ *
+ * The pane mounts the ghost text of the AI feature on the document, so a
+ * suggestion appears after the reader stops typing. The extension is built
+ * once and never built again: a new extension would give the editor a new
+ * wait, and the reader would type forever without a suggestion.
  */
 
 declare global {
@@ -106,6 +113,18 @@ export function EditorPane({
   const minimap = useSettingsStore((state) => state.minimap);
   const reveal = useEditorStore((state) => (state.reveal?.path === key ? state.reveal : null));
 
+  const provider = useAiStore((state) => state.provider);
+  const model = useAiStore((state) => state.model);
+  const completionsEnabled = useAiStore((state) => state.completionsEnabled);
+
+  const ghostText = useGhostText({
+    viewRef: view,
+    active,
+    provider,
+    model,
+    enabled: completionsEnabled,
+  });
+
   const resolvedLanguage = useMemo(
     () => language ?? (path ? languageForPath(path) : "plaintext"),
     [language, path],
@@ -124,8 +143,9 @@ export function EditorPane({
       selectionListener(({ anchor, head }) =>
         setCursor((current: FileCursor) => ({ ...current, anchor, head })),
       ),
+      ghostText,
     ],
-    [fontFamily, fontSize, setCursor, tabSize, wordWrap],
+    [fontFamily, fontSize, ghostText, setCursor, tabSize, wordWrap],
   );
 
   useEffect(() => {

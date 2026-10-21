@@ -131,6 +131,19 @@ class AiStub {
   private readonly timers = new Map<string, ReturnType<typeof setTimeout>[]>();
   private readonly received: string[] = [];
   private finished = false;
+  private tokenDelayMs = STUB_TOKEN_DELAY_MS;
+
+  /**
+   * The gap the stub waits between two tokens.
+   *
+   * The gap is short by default, so a case that only waits for the stream
+   * does not spend its time. A case that needs a stream that stays open, such
+   * as the one that reads the state of the screen while the request runs,
+   * asks for a longer one.
+   */
+  setTokenDelay(ms: number): void {
+    this.tokenDelayMs = ms;
+  }
 
   /** The commands the frontend sent, in order. */
   get commandLog(): readonly AiCall[] {
@@ -218,7 +231,7 @@ class AiStub {
             }
           }
         },
-        STUB_TOKEN_DELAY_MS * (index + 1),
+        this.tokenDelayMs * (index + 1),
       );
 
       timers.push(timer);
@@ -430,6 +443,8 @@ export interface AiDebug {
   }) => Promise<string>;
   /** End the request of an id. */
   readonly cancel: (requestId: string) => Promise<void>;
+  /** The gap the stub waits between two tokens, in milliseconds. */
+  readonly setTokenDelay: (ms: number) => void;
 }
 
 declare global {
@@ -465,6 +480,9 @@ if (!isTauriHost() && typeof window !== "undefined") {
     },
     cancel: async (requestId) => {
       await cancelRequest(requestId);
+    },
+    setTokenDelay: (ms) => {
+      aiStub.setTokenDelay(ms);
     },
   };
 }
