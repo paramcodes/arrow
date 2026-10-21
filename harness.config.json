@@ -4,7 +4,7 @@
     "exec": "pnpm exec"
   },
   "minimumCriteria": 10,
-  "minimumProofs": 41,
+  "minimumProofs": 42,
   "agents": {
     "file": "AGENTS.md",
     "entryPoint": "CLAUDE.md",
@@ -30,6 +30,12 @@
         "kind": "command",
         "run": "node scripts/check-theme-discipline.mjs",
         "contains": "no-hardcoded-colors"
+      },
+      {
+        "match": "Every package that ships utility classes is scanned by Tailwind",
+        "path": "packages/ui/src/tailwind-source.test.ts",
+        "kind": "command",
+        "run": "pnpm exec vitest run packages/ui/src/tailwind-source.test.ts"
       },
       {
         "match": "The source tree has no escape hatches",
@@ -138,6 +144,11 @@
             "path": "jobs.rust.steps",
             "key": "run",
             "contains": ["cargo test"]
+          },
+          {
+            "path": "jobs.e2e.steps",
+            "key": "run",
+            "contains": ["pnpm test:e2e"]
           }
         ]
       },
@@ -285,6 +296,11 @@
             "key": "run",
             "contains": ["apt-get install", "libayatana-appindicator3-dev"],
             "notContains": ["libappindicator3-dev"]
+          },
+          {
+            "path": "jobs.e2e.steps",
+            "key": "run",
+            "contains": ["pnpm test:e2e"]
           }
         ]
       }
@@ -905,6 +921,20 @@
         "run": "${PM_EXEC} vitest run apps/desktop/src/components/layout/density.test.ts",
         "exit": "nonzero",
         "contains": "uses a twelve pixel padding"
+      }
+    },
+    {
+      "name": "the ci criterion fails when the workflow stops running the end to end suite",
+      "write": [
+        {
+          "path": ".github/workflows/ci.yml",
+          "content": "name: CI\n\non:\n  push:\n    branches: [main, master]\n  pull_request:\n\njobs:\n  verify:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - name: Verify\n        run: pnpm verify\n      - name: Prove the guardrails\n        run: pnpm prove\n      - name: Score the agent harness\n        run: pnpm harness\n  rust:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - name: Install the Tauri system dependencies\n        run: |\n          sudo apt-get update\n          sudo apt-get install -y libayatana-appindicator3-dev\n      - name: Run the Rust tests\n        run: cargo test\n"
+        }
+      ],
+      "expect": {
+        "run": "node scripts/harness-score.mjs --only ci",
+        "exit": "nonzero",
+        "contains": "ci"
       }
     }
   ],

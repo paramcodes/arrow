@@ -113,6 +113,7 @@ const EXPECTED_PROOF_NAMES = [
   "the prover refuses a second run while the lock is held",
   "the store test that skips the reset is caught",
   "the shell content padding that leaves eight pixels is caught",
+  "the ci criterion fails when the workflow stops running the end to end suite",
 ];
 
 if (!Number.isInteger(minimumProofs) || minimumProofs < 1) {
