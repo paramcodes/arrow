@@ -92,10 +92,21 @@ describe("the AI boundary", () => {
   });
 
   it("answers whether a provider has a key, and never answers with one", async () => {
+    await deleteApiKey("anthropic");
     const answer = await hasApiKey("anthropic");
 
     expect(typeof answer, "the bridge never returns the key").toBe("boolean");
     expect(answer).toBe(false);
+  });
+
+  it("remembers that a provider has a key, and never the key itself", async () => {
+    await setApiKey("google", "the-key-a-reader-typed");
+    const answer = await hasApiKey("google");
+
+    expect(answer, "the keychain of the browser build answers like the shell").toBe(true);
+    expect(JSON.stringify(aiStub.commandLog), "the stub keeps no key material").not.toContain(
+      "the-key-a-reader-typed",
+    );
   });
 
   it("keeps no key material in the log of the calls", async () => {

@@ -108,8 +108,46 @@ const STUB_TOKENS: readonly string[] = [
   ".",
 ];
 
+/**
+ * The comment the stub adds to the text the reader selected.
+ *
+ * The stub stands in for the model of the shell, and the model answers with a
+ * rewrite of the text the reader selected. The stub rewrites the last line of
+ * that text, so the diff of the browser build holds a line the model removes
+ * and a line the model adds, the way the diff of the shell does.
+ */
+const STUB_EDIT_MARKER = " // the model rewrote this line";
+
 /** The gap between two tokens of the stub, in milliseconds. */
 const STUB_TOKEN_DELAY_MS = 30;
+
+/**
+ * The text the stub proposes for the selection of the reader.
+ *
+ * The last line of the selection carries the comment of the stub, and the
+ * rest of the text stays as the reader left it.
+ */
+function editProposal(selection: unknown): string {
+  const text = typeof selection === "string" ? selection : "";
+  if (text === "") return STUB_EDIT_MARKER.trim();
+
+  const lines = text.split("\n");
+  const last = lines.length - 1;
+  const lastLine = lines[last] ?? "";
+  lines[last] = `${lastLine}${STUB_EDIT_MARKER}`;
+
+  return lines.join("\n");
+}
+
+/**
+ * The pieces the stub streams the proposal in.
+ *
+ * The proposal arrives in pieces, so the diff of the browser build grows the
+ * way the diff of the shell grows.
+ */
+function editTokens(proposal: string): readonly string[] {
+  return proposal.match(/\S+\s*/g) ?? [];
+}
 
 /** The listeners of one request. */
 interface StubListeners {
@@ -124,12 +162,16 @@ interface StubListeners {
  * It records every call so the end to end suite can read what the frontend
  * asked the shell to do, and it replays the token stream the way Rust does:
  * one event per token and one event at the end.
+ *
+ * The keychain of the shell is a keychain here too: the stub remembers which
+ * providers have a key, and it never keeps the key itself.
  */
 class AiStub {
   private readonly calls: AiCall[] = [];
   private readonly listeners = new Map<string, StubListeners>();
   private readonly timers = new Map<string, ReturnType<typeof setTimeout>[]>();
   private readonly received: string[] = [];
+  private readonly keys = new Set<AiProvider>();
   private finished = false;
   private tokenDelayMs = STUB_TOKEN_DELAY_MS;
 
@@ -163,13 +205,13 @@ class AiStub {
   /** Record a call and answer with the canned stream of tokens. */
   complete(requestId: string, args: Readonly<Record<string, unknown>>): void {
     this.calls.push({ command: "complete", args });
-    this.replay(requestId);
+    this.replay(requestId, STUB_TOKENS);
   }
 
-  /** Record a call and answer with the canned stream of tokens. */
+  /** Record a call and answer with the canned stream of the proposed edit. */
   inlineEdit(requestId: string, args: Readonly<Record<string, unknown>>): void {
     this.calls.push({ command: "inline_edit", args });
-    this.replay(requestId);
+    this.replay(requestId, editTokens(editProposal(args.selection)));
   }
 
   /** Record a call and stop the stream of a request. */
@@ -181,17 +223,19 @@ class AiStub {
   /** Record a call. The key is never part of the record. */
   setKey(provider: AiProvider): void {
     this.calls.push({ command: "set_api_key", args: { provider, key: REDACTED } });
+    this.keys.add(provider);
   }
 
-  /** Record a call and answer that the provider has no key. */
+  /** Record a call and answer whether the provider has a key. */
   getKey(provider: AiProvider): boolean {
     this.calls.push({ command: "get_api_key", args: { provider } });
-    return false;
+    return this.keys.has(provider);
   }
 
   /** Record a call. */
   deleteKey(provider: AiProvider): void {
     this.calls.push({ command: "delete_api_key", args: { provider } });
+    this.keys.delete(provider);
   }
 
   /** The listeners of a request. */
@@ -209,14 +253,14 @@ class AiStub {
   }
 
   /** Replay the canned stream of one request. */
-  private replay(requestId: string): void {
+  private replay(requestId: string, tokens: readonly string[]): void {
     this.stop(requestId);
     this.finished = false;
 
     const timers: ReturnType<typeof setTimeout>[] = [];
     this.timers.set(requestId, timers);
 
-    STUB_TOKENS.forEach((token, index) => {
+    tokens.forEach((token, index) => {
       const timer = setTimeout(
         () => {
           this.received.push(token);
@@ -224,7 +268,7 @@ class AiStub {
             listener({ token, done: false });
           }
 
-          if (index === STUB_TOKENS.length - 1) {
+          if (index === tokens.length - 1) {
             this.finished = true;
             for (const listener of this.listenersOf(requestId).completes) {
               listener({ done: true });
