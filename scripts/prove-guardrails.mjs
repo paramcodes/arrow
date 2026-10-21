@@ -132,6 +132,8 @@ const EXPECTED_PROOF_NAMES = [
   "the next run restores the probe file of a run that was killed",
   "the command registry that grew an action without a spy for it is caught",
   "the dialog permission lives in a capability of its own",
+  "the error of the AI client carries no key",
+  "the error of the AI client keeps the key out of the tree",
 ];
 
 /**

@@ -8,6 +8,7 @@ use std::sync::Arc;
 
 use tauri::Manager;
 
+pub mod ai;
 pub mod commands;
 pub mod pty;
 

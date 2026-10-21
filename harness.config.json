@@ -4,7 +4,7 @@
     "exec": "pnpm exec"
   },
   "minimumCriteria": 13,
-  "minimumProofs": 59,
+  "minimumProofs": 61,
   "agents": {
     "file": "AGENTS.md",
     "entryPoint": "CLAUDE.md",
@@ -1220,6 +1220,29 @@
         "run": "node -e \"const fs=require('fs');const p=JSON.parse(fs.readFileSync('apps/desktop/src-tauri/capabilities/default.json','utf8'));const extra=p.permissions.filter((x)=>x.startsWith('dialog:'));if(extra.length){console.error('the default capability of the shell grants '+extra.join(' '));process.exit(1)}\"",
         "exit": "nonzero",
         "contains": "the default capability of the shell grants"
+      }
+    },
+    {
+      "name": "the error of the AI client carries no key",
+      "write": [
+        {
+          "path": "apps/desktop/src-tauri/src/ai/leak_probe.rs",
+          "content": "//! The probe: the error of the AI client carries the key.\n//!\n//! The error type of the client has no field for a key, so a key cannot\n//! travel in an error. This file is never compiled: the proof reads it.\n\n/// The failure of one request.\npub enum AiError {\n    /// The request never reached the provider.\n    Transport {\n        /// The key that was sent.\n        key: String,\n    },\n}\n"
+        }
+      ],
+      "expect": {
+        "run": "node -e \"const fs=require('fs'),path=require('path');const dir='apps/desktop/src-tauri/src/ai';const files=fs.readdirSync(dir,{recursive:true}).filter((f)=>f.endsWith('.rs'));let bad=[];for(const file of files){const source=fs.readFileSync(path.join(dir,file),'utf8');const m=source.match(/pub enum AiError \\{([\\s\\S]*?)\\n\\}/);if(m&&/^[ \\t]*key[ \\t]*:/m.test(m[1]))bad.push(file)}if(bad.length){console.error('the error of the AI client carries the key: '+bad.join(' '));process.exit(1)}console.log('the error of the AI client carries no key')\"",
+        "exit": "nonzero",
+        "contains": "the error of the AI client carries the key"
+      }
+    },
+    {
+      "name": "the error of the AI client keeps the key out of the tree",
+      "write": [],
+      "expect": {
+        "run": "node -e \"const fs=require('fs'),path=require('path');const dir='apps/desktop/src-tauri/src/ai';const files=fs.readdirSync(dir,{recursive:true}).filter((f)=>f.endsWith('.rs'));let bad=[];for(const file of files){const source=fs.readFileSync(path.join(dir,file),'utf8');const m=source.match(/pub enum AiError \\{([\\s\\S]*?)\\n\\}/);if(m&&/^[ \\t]*key[ \\t]*:/m.test(m[1]))bad.push(file)}if(bad.length){console.error('the error of the AI client carries the key: '+bad.join(' '));process.exit(1)}console.log('the error of the AI client carries no key')\"",
+        "exit": "zero",
+        "contains": "the error of the AI client carries no key"
       }
     }
   ],
