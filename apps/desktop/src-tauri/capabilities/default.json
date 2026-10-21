@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "The permissions the Arrow main window needs to render the shell.",
+  "description": "The permissions the Arrow main window needs to render the shell. The terminal commands (create_pty, write_pty, resize_pty, kill_pty, pty_alive) are application commands, so the ACL does not gate them and this file grants no terminal permission.",
   "windows": ["main"],
   "permissions": ["core:default", "store:default"]
 }
