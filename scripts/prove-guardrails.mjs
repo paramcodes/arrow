@@ -134,107 +134,6 @@ const EXPECTED_PROOF_NAMES = [
   "the dialog permission lives in a capability of its own",
 ];
 
-if (!Number.isInteger(minimumProofs) || minimumProofs < 1) {
-  console.error(`prove: ${configPath} must set minimumProofs to a whole number of at least 1`);
-  process.exit(1);
-}
-
-if (minimumProofs !== EXPECTED_PROOF_NAMES.length) {
-  console.error(
-    `prove: minimumProofs is ${minimumProofs}, the harness holds ${EXPECTED_PROOF_NAMES.length} proof cases`,
-  );
-  process.exit(1);
-}
-
-const names = proofs.map((proof) => proof.name);
-const nameCounts = new Map();
-for (const name of names) nameCounts.set(name, (nameCounts.get(name) ?? 0) + 1);
-
-const missingNames = EXPECTED_PROOF_NAMES.filter((name) => !nameCounts.has(name));
-const unexpectedNames = names.filter((name) => !EXPECTED_PROOF_NAMES.includes(name));
-const duplicatedNames = [...nameCounts.entries()]
-  .filter(([, count]) => count > 1)
-  .map(([name]) => name);
-
-if (missingNames.length > 0 || unexpectedNames.length > 0 || duplicatedNames.length > 0) {
-  console.error("prove: the proof set does not hold the cases the harness holds");
-  if (missingNames.length > 0) console.error(`  missing: ${missingNames.join(", ")}`);
-  if (unexpectedNames.length > 0) console.error(`  unexpected: ${unexpectedNames.join(", ")}`);
-  if (duplicatedNames.length > 0) console.error(`  duplicated: ${duplicatedNames.join(", ")}`);
-  process.exit(1);
-}
-
-if (proofs.length < minimumProofs) {
-  console.error(
-    `prove: the proof set holds ${proofs.length} cases, at least ${minimumProofs} are required`,
-  );
-  process.exit(1);
-}
-
-function expand(text, probe) {
-  return String(text)
-    .replaceAll("${PM}", packageManager)
-    .replaceAll("${PM_EXEC}", execCommand)
-    .replaceAll("${DATA_ALIAS}", alias)
-    .replaceAll("${PROOF_COUNT}", String(EXPECTED_PROOF_NAMES.length))
-    .replaceAll("${TREE_ROOT}", root)
-    .replaceAll("${TREE_HASH}", treeHash)
-    .replaceAll("${PROBE}", probe ?? "");
-}
-
-/**
- * The checker runs in a child process without blocking the event loop. A
- * blocking call would swallow the interrupt that stops this script, which is
- * the one signal the operator can always send.
- */
-let runningChild = null;
-
-function run(command, probe) {
-  return new Promise((resolve) => {
-    const child = spawn(expand(command, probe), {
-      shell: true,
-      cwd: root,
-      stdio: ["ignore", "pipe", "pipe"],
-      env: {
-        ...process.env,
-        // The children of this run run against the same tree, so they are
-        // told that the tree is owned and must not take the lock again.
-        HARNESS_TREE_LOCK_OWNER: String(lockOwnerPid ?? process.pid),
-      },
-    });
-    runningChild = child;
-
-    let output = "";
-    child.stdout.on("data", (chunk) => {
-      output += chunk;
-    });
-    child.stderr.on("data", (chunk) => {
-      output += chunk;
-    });
-    child.on("error", (error) => {
-      if (runningChild === child) runningChild = null;
-      resolve({ code: 1, output: `${output}${error.message}`.trim() });
-    });
-    child.on("close", (code) => {
-      if (runningChild === child) runningChild = null;
-      resolve({ code: typeof code === "number" ? code : 1, output: output.trim() });
-    });
-  });
-}
-
-function directoriesFor(file) {
-  const missing = [];
-  // A path outside the tree has its directories already, and the tree must
-  // not grow a directory for it.
-  if (path.isAbsolute(file)) return missing;
-  let current = path.dirname(path.join(root, file));
-  while (current.startsWith(root) && !existsSync(current)) {
-    missing.push(current);
-    current = path.dirname(current);
-  }
-  return missing.reverse();
-}
-
 /**
  * The journal holds the state of the files the runner is about to overwrite.
  * It lives outside the tree, so a run that is killed outright still leaves a
@@ -570,6 +469,107 @@ if (inheritedOwner !== null) {
 }
 
 recoverStaleProbes();
+
+if (!Number.isInteger(minimumProofs) || minimumProofs < 1) {
+  console.error(`prove: ${configPath} must set minimumProofs to a whole number of at least 1`);
+  process.exit(1);
+}
+
+if (minimumProofs !== EXPECTED_PROOF_NAMES.length) {
+  console.error(
+    `prove: minimumProofs is ${minimumProofs}, the harness holds ${EXPECTED_PROOF_NAMES.length} proof cases`,
+  );
+  process.exit(1);
+}
+
+const names = proofs.map((proof) => proof.name);
+const nameCounts = new Map();
+for (const name of names) nameCounts.set(name, (nameCounts.get(name) ?? 0) + 1);
+
+const missingNames = EXPECTED_PROOF_NAMES.filter((name) => !nameCounts.has(name));
+const unexpectedNames = names.filter((name) => !EXPECTED_PROOF_NAMES.includes(name));
+const duplicatedNames = [...nameCounts.entries()]
+  .filter(([, count]) => count > 1)
+  .map(([name]) => name);
+
+if (missingNames.length > 0 || unexpectedNames.length > 0 || duplicatedNames.length > 0) {
+  console.error("prove: the proof set does not hold the cases the harness holds");
+  if (missingNames.length > 0) console.error(`  missing: ${missingNames.join(", ")}`);
+  if (unexpectedNames.length > 0) console.error(`  unexpected: ${unexpectedNames.join(", ")}`);
+  if (duplicatedNames.length > 0) console.error(`  duplicated: ${duplicatedNames.join(", ")}`);
+  process.exit(1);
+}
+
+if (proofs.length < minimumProofs) {
+  console.error(
+    `prove: the proof set holds ${proofs.length} cases, at least ${minimumProofs} are required`,
+  );
+  process.exit(1);
+}
+
+function expand(text, probe) {
+  return String(text)
+    .replaceAll("${PM}", packageManager)
+    .replaceAll("${PM_EXEC}", execCommand)
+    .replaceAll("${DATA_ALIAS}", alias)
+    .replaceAll("${PROOF_COUNT}", String(EXPECTED_PROOF_NAMES.length))
+    .replaceAll("${TREE_ROOT}", root)
+    .replaceAll("${TREE_HASH}", treeHash)
+    .replaceAll("${PROBE}", probe ?? "");
+}
+
+/**
+ * The checker runs in a child process without blocking the event loop. A
+ * blocking call would swallow the interrupt that stops this script, which is
+ * the one signal the operator can always send.
+ */
+let runningChild = null;
+
+function run(command, probe) {
+  return new Promise((resolve) => {
+    const child = spawn(expand(command, probe), {
+      shell: true,
+      cwd: root,
+      stdio: ["ignore", "pipe", "pipe"],
+      env: {
+        ...process.env,
+        // The children of this run run against the same tree, so they are
+        // told that the tree is owned and must not take the lock again.
+        HARNESS_TREE_LOCK_OWNER: String(lockOwnerPid ?? process.pid),
+      },
+    });
+    runningChild = child;
+
+    let output = "";
+    child.stdout.on("data", (chunk) => {
+      output += chunk;
+    });
+    child.stderr.on("data", (chunk) => {
+      output += chunk;
+    });
+    child.on("error", (error) => {
+      if (runningChild === child) runningChild = null;
+      resolve({ code: 1, output: `${output}${error.message}`.trim() });
+    });
+    child.on("close", (code) => {
+      if (runningChild === child) runningChild = null;
+      resolve({ code: typeof code === "number" ? code : 1, output: output.trim() });
+    });
+  });
+}
+
+function directoriesFor(file) {
+  const missing = [];
+  // A path outside the tree has its directories already, and the tree must
+  // not grow a directory for it.
+  if (path.isAbsolute(file)) return missing;
+  let current = path.dirname(path.join(root, file));
+  while (current.startsWith(root) && !existsSync(current)) {
+    missing.push(current);
+    current = path.dirname(current);
+  }
+  return missing.reverse();
+}
 
 for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) {
   process.on(signal, () => onSignal(signal));
