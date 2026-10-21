@@ -17,6 +17,8 @@
     "@arrow/theme": "workspace:*",
     "@arrow/types": "workspace:*",
     "@arrow/ui": "workspace:*",
+    "@codemirror/state": "^6.7.6",
+    "@codemirror/view": "^6.43.15",
     "@tauri-apps/api": "2.12.4",
     "jotai": "2.20.3",
     "lucide-react": "1.60.0",

@@ -7,10 +7,14 @@ import {
   languageForPath,
   selectionListener,
 } from "@arrow/editor-core";
+import { EditorState } from "@codemirror/state";
+import { EditorView as View } from "@codemirror/view";
 import { useAtomValue, useSetAtom } from "jotai";
 
 import { fileCursorAtom, type FileCursor } from "../../atoms/file";
 import { baseName } from "../../hooks/fileSystem";
+import { useEditorStore } from "../../stores/editor";
+import { useSettingsStore } from "../../stores/settings";
 
 /**
  * The editor pane of one open file.
@@ -22,6 +26,10 @@ import { baseName } from "../../hooks/fileSystem";
  * The caret of the pane is written to the atom family of the file, so a later
  * session can read the place of the reader without the store that holds the
  * workspace.
+ *
+ * The pane reads the settings of the editor, so a change of the font size, the
+ * family, the width of a tab or the wrapping of long lines repaints the open
+ * document while the reader is still in the settings dialog.
  */
 
 declare global {
@@ -50,6 +58,33 @@ export interface EditorPaneProps {
 /** The text the pane opens with before a file is open. */
 export const PLACEHOLDER_SOURCE = "";
 
+/** How many lines the minimap draws at most. */
+const MINIMAP_LINES = 200;
+
+/** The preview of the document beside the text. */
+function Minimap({ content }: { readonly content: string }) {
+  const lines = useMemo(() => content.split("\n").slice(0, MINIMAP_LINES), [content]);
+
+  return (
+    <div
+      aria-hidden="true"
+      className="flex w-14 shrink-0 flex-col gap-px overflow-hidden border-l border-border bg-canvas px-1 py-2"
+      data-testid="editor-minimap"
+    >
+      {lines.map((line, index) => (
+        <span
+          className="block h-px shrink-0 bg-ink-tertiary"
+          key={index}
+          style={{
+            opacity: 0.5,
+            width: `${Math.min(100, Math.max(4, line.trim().length * 1.5))}%`,
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
 /** The pane that holds the editor of the open document. */
 export function EditorPane({
   path,
@@ -64,6 +99,13 @@ export function EditorPane({
   const setCursor = useSetAtom(fileCursorAtom(key));
   const view = useRef<EditorView | null>(null);
 
+  const fontSize = useSettingsStore((state) => state.fontSize);
+  const fontFamily = useSettingsStore((state) => state.fontFamily);
+  const tabSize = useSettingsStore((state) => state.tabSize);
+  const wordWrap = useSettingsStore((state) => state.wordWrap);
+  const minimap = useSettingsStore((state) => state.minimap);
+  const reveal = useEditorStore((state) => (state.reveal?.path === key ? state.reveal : null));
+
   const resolvedLanguage = useMemo(
     () => language ?? (path ? languageForPath(path) : "plaintext"),
     [language, path],
@@ -71,11 +113,19 @@ export function EditorPane({
 
   const extensions = useMemo<EditorProps["extensions"]>(
     () => [
+      EditorState.tabSize.of(tabSize),
+      View.theme({
+        // The selector names the editor element twice, so the rule of this
+        // pane beats the base theme of the engine: the base theme paints the
+        // text at its own size, and the settings own the size from here on.
+        "&.cm-editor": { fontFamily, fontSize: `${fontSize}px` },
+      }),
+      wordWrap ? View.lineWrapping : [],
       selectionListener(({ anchor, head }) =>
         setCursor((current: FileCursor) => ({ ...current, anchor, head })),
       ),
     ],
-    [setCursor],
+    [fontFamily, fontSize, setCursor, tabSize, wordWrap],
   );
 
   useEffect(() => {
@@ -95,6 +145,22 @@ export function EditorPane({
     const instance = view.current;
     if (instance) instance.scrollDOM.scrollTop = cursor.scrollTop;
   }, [active, cursor.scrollTop]);
+
+  useEffect(() => {
+    if (!active || !reveal) return;
+    const instance = view.current;
+    if (!instance) return;
+
+    const doc = instance.state.doc;
+    const line = doc.line(Math.min(Math.max(reveal.line, 1), doc.lines));
+    const position = Math.min(line.from + Math.max(reveal.column - 1, 0), line.to);
+
+    instance.dispatch({
+      selection: { anchor: position },
+      effects: View.scrollIntoView(position, { y: "center" }),
+    });
+    instance.focus();
+  }, [active, reveal]);
 
   useEffect(() => {
     if (!active) return;
@@ -117,15 +183,18 @@ export function EditorPane({
       data-path={key}
       data-file-name={path ? baseName(path) : ""}
     >
-      <Editor
-        className="min-h-0 flex-1"
-        content={content}
-        extensions={extensions}
-        language={resolvedLanguage}
-        onChange={onChange}
-        testId="editor"
-        viewRef={view}
-      />
+      <div className="flex min-h-0 flex-1">
+        <Editor
+          className="min-h-0 flex-1"
+          content={content}
+          extensions={extensions}
+          language={resolvedLanguage}
+          onChange={onChange}
+          testId="editor"
+          viewRef={view}
+        />
+        {minimap ? <Minimap content={content} /> : null}
+      </div>
     </div>
   );
 }

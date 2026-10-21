@@ -27,12 +27,26 @@ export interface OpenFile {
   readonly dirty: boolean;
 }
 
+/** A line the editor has to reveal in a file. */
+export interface RevealTarget {
+  /** The path of the file. */
+  readonly path: string;
+  /** The line to reveal, counting from one. */
+  readonly line: number;
+  /** The column to put the caret on, counting from one. */
+  readonly column: number;
+  /** A counter that changes on every request, so two requests are two events. */
+  readonly nonce: number;
+}
+
 /** The facts of the editor, without the actions that change them. */
 export interface EditorFacts {
   /** The files that are open, in the order of their tabs. */
   readonly openFiles: readonly OpenFile[];
   /** The path of the active file, or null when no file is open. */
   readonly activePath: string | null;
+  /** The place a search result asked for, or null. */
+  readonly reveal: RevealTarget | null;
 }
 
 /** The editor store of the shell. */
@@ -51,10 +65,17 @@ export interface EditorState extends EditorFacts {
   readonly saveAll: () => Promise<void>;
   /** Move the path of an open file after a rename in the tree. */
   readonly remapPath: (from: string, to: string) => void;
+  /** Open a file and put the caret on a line of it. */
+  readonly openFileAt: (path: string, line: number, column?: number) => Promise<void>;
+  /** Put the caret on a line of a file that is open. */
+  readonly revealLine: (path: string, line: number, column?: number) => void;
 }
 
 /** The facts the editor holds when it opens. */
-const INITIAL_FACTS: EditorFacts = { openFiles: [], activePath: null };
+const INITIAL_FACTS: EditorFacts = { openFiles: [], activePath: null, reveal: null };
+
+/** The counter behind the nonce of a reveal, so two requests never share one. */
+let revealNonce = 0;
 
 /** The language of a path, or plain text when the registry does not know it. */
 export function languageOfPath(path: string): string {
@@ -137,6 +158,23 @@ export const useEditorStore = create<EditorState>()((set, get) => ({
   saveAll: async () => {
     const dirty = get().openFiles.filter((file) => file.dirty);
     await Promise.all(dirty.map((file) => get().saveFile(file.path)));
+  },
+
+  openFileAt: async (path, line, column = 1) => {
+    await get().openFile(path);
+    get().revealLine(path, line, column);
+  },
+
+  revealLine: (path, line, column = 1) => {
+    revealNonce += 1;
+    set({
+      reveal: {
+        path,
+        line: Math.max(1, Math.round(line)),
+        column: Math.max(1, Math.round(column)),
+        nonce: revealNonce,
+      },
+    });
   },
 
   remapPath: (from, to) => {

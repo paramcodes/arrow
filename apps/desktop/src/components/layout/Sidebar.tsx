@@ -2,6 +2,7 @@ import { ScrollArea } from "@arrow/ui";
 
 import { useLayoutStore, type ActivePanel } from "../../stores/layout";
 import { FileTree } from "../sidebar/FileTree";
+import { SearchPanel } from "../sidebar/SearchPanel";
 
 /** The title of every panel of the sidebar. */
 const TITLES: Record<ActivePanel, string> = {
@@ -15,7 +16,7 @@ const TITLES: Record<ActivePanel, string> = {
 /** The line each panel shows while it waits for its own session. */
 const NOTES: Record<ActivePanel, string> = {
   explorer: "The files of the workspace.",
-  search: "The search across the workspace lands in a later session.",
+  search: "The text of every file of the workspace.",
   git: "The source control view lands in a later session.",
   chat: "The chat with the assistant lands in a later session.",
   settings: "The settings of the workspace land in a later session.",
@@ -36,13 +37,17 @@ export function Sidebar() {
       <header className="flex h-8 shrink-0 items-center border-b border-border px-2 text-xs font-medium text-ink">
         {TITLES[activePanel]}
       </header>
-      <ScrollArea className="min-h-0 flex-1">
-        {activePanel === "explorer" ? (
-          <FileTree />
-        ) : (
-          <p className="p-2 text-xs text-ink-tertiary">{NOTES[activePanel]}</p>
-        )}
-      </ScrollArea>
+      {activePanel === "search" ? (
+        <SearchPanel />
+      ) : (
+        <ScrollArea className="min-h-0 flex-1">
+          {activePanel === "explorer" ? (
+            <FileTree />
+          ) : (
+            <p className="p-2 text-xs text-ink-tertiary">{NOTES[activePanel]}</p>
+          )}
+        </ScrollArea>
+      )}
     </div>
   );
 }
