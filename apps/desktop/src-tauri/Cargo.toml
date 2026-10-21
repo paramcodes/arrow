@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Arrow desktop shell"
 authors = ["Arrow"]
 edition = "2021"
-rust-version = "1.77.2"
+rust-version = "1.85"
 
 [lib]
 name = "arrow_desktop_lib"
@@ -19,12 +19,13 @@ git2 = { version = "0.21", features = ["vendored-libgit2"] }
 keyring = { version = "3.6", default-features = false, features = ["sync-secret-service", "crypto-rust"] }
 notify = "8"
 portable-pty = "0.9.0"
+reqwest = "0.13"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tauri = { version = "2", features = [] }
 tauri-plugin-dialog = "2"
 tauri-plugin-store = "2"
-tokio = { version = "1.53.3", features = ["time", "sync", "rt", "macros"] }
+tokio = { version = "1.53.3", features = ["time", "sync", "rt", "macros", "net", "io-util"] }
 
 [profile.release]
 codegen-units = 1
