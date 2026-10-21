@@ -32,6 +32,11 @@ import { useGhostText } from "./useGhostText";
  * The pane reads the settings of the editor, so a change of the font size, the
  * family, the width of a tab or the wrapping of long lines repaints the open
  * document while the reader is still in the settings dialog.
+ *
+ * The pane mounts the ghost text of the AI feature on the document, so a
+ * suggestion appears after the reader stops typing. The extension is built
+ * once and never built again: a new extension would give the editor a new
+ * wait, and the reader would type forever without a suggestion.
  */
 
 declare global {
