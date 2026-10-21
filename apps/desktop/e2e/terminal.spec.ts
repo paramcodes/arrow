@@ -197,20 +197,26 @@ test("dragging the panel fits the terminal and resizes the PTY", async ({ page }
     )
     .toBe(true);
 
-  const after = await page.evaluate(() => ({
-    cols: window.__arrowTerminal?.cols ?? 0,
-    rows: window.__arrowTerminal?.rows ?? 0,
-  }));
-  const lastResize = await page.evaluate(
-    (id) =>
-      [...(window.__arrowPtyStub?.calls ?? [])]
-        .reverse()
-        .find((call) => call.command === "resize_pty" && call.args.id === id)?.args ?? null,
-    before.id,
-  );
+  // The panel moves on a spring, so the size settles over a few frames. The
+  // last resize the PTY received is the size the terminal shows once it stops.
+  await expect
+    .poll(async () =>
+      page.evaluate((previousRows) => {
+        const calls = window.__arrowPtyStub?.calls ?? [];
+        const id = window.__arrowTerminal?.sessionId ?? "";
+        const last = [...calls]
+          .reverse()
+          .find((call) => call.command === "resize_pty" && call.args.id === id);
 
-  expect(lastResize?.cols).toBe(after.cols);
-  expect(lastResize?.rows).toBe(after.rows);
+        const cols = window.__arrowTerminal?.cols ?? 0;
+        const rows = window.__arrowTerminal?.rows ?? 0;
+        const sentCols = Number(last?.args.cols ?? 0);
+        const sentRows = Number(last?.args.rows ?? 0);
+
+        return rows > previousRows && cols > 0 && cols === sentCols && rows === sentRows;
+      }, before.rows),
+    )
+    .toBe(true);
 });
 
 test("terminal tabs open, switch and close their PTY", async ({ page }) => {
