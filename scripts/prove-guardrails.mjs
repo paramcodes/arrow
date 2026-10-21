@@ -122,6 +122,7 @@ const EXPECTED_PROOF_NAMES = [
   "a content change that loses the caret is caught",
   "the active line case fails when the active line is not painted",
   "the command registry that grew an action without a spy for it is caught",
+  "the dialog permission lives in a capability of its own",
 ];
 
 if (!Number.isInteger(minimumProofs) || minimumProofs < 1) {
