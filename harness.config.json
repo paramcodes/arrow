@@ -376,7 +376,7 @@
       "check": {
         "type": "artifactContains",
         "build": "${PM} build",
-        "artifact": "apps/desktop/dist/assets/*.js",
+        "artifact": "apps/desktop/dist/assets/index-*.js",
         "contains": ["arrow-editor", "editor-pane"]
       }
     },

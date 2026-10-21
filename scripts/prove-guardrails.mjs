@@ -360,7 +360,10 @@ function lockOwnerIsGone() {
 function describeLockHolder() {
   try {
     const holder = JSON.parse(readFileSync(lockPath, "utf8"));
-    const seconds = Math.max(0, Math.round((Date.now() - (holder.startedAt ?? Date.now())) / 1000));
+    if (typeof holder.startedAt !== "number" || holder.startedAt <= 0) {
+      return `the run with the pid ${holder.pid}, which has held the lock for an unknown time`;
+    }
+    const seconds = Math.max(0, Math.round((Date.now() - holder.startedAt) / 1000));
     return `the run with the pid ${holder.pid}, which has held the lock for ${seconds} seconds`;
   } catch {
     return "a run whose holder cannot be read";
@@ -376,6 +379,11 @@ function describeLockHolder() {
  * other, and a proof run that a score runs cannot fight over the probe files.
  */
 function inheritedLockOwner() {
+  // A run that names a lock of its own must take that lock, even when an
+  // ancestor owns the tree. A case that proves the refusal of a second run
+  // names the lock on purpose, and a run that skipped it would write probe
+  // files into the tree of the run that holds it.
+  if (process.env.PROVE_LOCK_PATH) return null;
   const raw = process.env.HARNESS_TREE_LOCK_OWNER;
   if (!raw) return null;
   const pid = Number(raw);
