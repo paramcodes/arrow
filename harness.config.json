@@ -4,7 +4,7 @@
     "exec": "pnpm exec"
   },
   "minimumCriteria": 13,
-  "minimumProofs": 57,
+  "minimumProofs": 59,
   "agents": {
     "file": "AGENTS.md",
     "entryPoint": "CLAUDE.md",
@@ -1192,6 +1192,34 @@
         "run": "HARNESS_CONFIG=harness.config.restore.json node scripts/prove-guardrails.mjs",
         "exit": "zero",
         "contains": "restored 1 probe file(s)"
+      }
+    },
+    {
+      "name": "the command registry that grew an action without a spy for it is caught",
+      "write": [
+        {
+          "path": "apps/desktop/src/components/command-palette/commands.test.ts",
+          "content": "import { describe, expect, it, vi } from \"vitest\";\n\nimport { createCommands, type CommandActions } from \"./commands\";\n\n/** A table of actions a command can run, every one a spy. */\nfunction actions(): CommandActions {\n  return {\n    openPalette: vi.fn(),\n    openSettings: vi.fn(),\n    toggleSidebar: vi.fn(),\n    toggleBottomPanel: vi.fn(),\n    showPanel: vi.fn(),\n    saveActiveFile: vi.fn(),\n    saveAllFiles: vi.fn(),\n  };\n}\n\ndescribe(\"the harness probe\", () => {\n  it(\"builds the registry\", () => {\n    expect(createCommands(actions()).length).toBeGreaterThan(0);\n  });\n});\n"
+        }
+      ],
+      "expect": {
+        "run": "${PM_EXEC} vitest run apps/desktop/src/components/command-palette/command-actions.test.ts",
+        "exit": "nonzero",
+        "contains": "the table of actions of the registry misses openFolder"
+      }
+    },
+    {
+      "name": "the dialog permission lives in a capability of its own",
+      "write": [
+        {
+          "path": "apps/desktop/src-tauri/capabilities/default.json",
+          "content": "{\n  \"$schema\": \"../gen/schemas/desktop-schema.json\",\n  \"identifier\": \"default\",\n  \"description\": \"The probe: the permission of the picker sits in the capability of the shell.\",\n  \"windows\": [\"main\"],\n  \"permissions\": [\"core:default\", \"store:default\", \"dialog:default\"]\n}\n"
+        }
+      ],
+      "expect": {
+        "run": "node -e \"const fs=require('fs');const p=JSON.parse(fs.readFileSync('apps/desktop/src-tauri/capabilities/default.json','utf8'));const extra=p.permissions.filter((x)=>x.startsWith('dialog:'));if(extra.length){console.error('the default capability of the shell grants '+extra.join(' '));process.exit(1)}\"",
+        "exit": "nonzero",
+        "contains": "the default capability of the shell grants"
       }
     }
   ],

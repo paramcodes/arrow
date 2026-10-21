@@ -182,6 +182,8 @@ const EXPECTED_PROOF_NAMES = [
   "the scorer refuses a second run while the tree lock is held",
   "the harness fails when it takes longer than the ceiling",
   "the next run restores the probe file of a run that was killed",
+  "the command registry that grew an action without a spy for it is caught",
+  "the dialog permission lives in a capability of its own",
 ];
 
 const GATE_NAMES = ["coverage", "proof-set", "runtime"];

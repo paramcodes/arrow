@@ -4,6 +4,7 @@ import { matchesShortcut } from "../../lib/shortcuts";
 import { useEditorStore } from "../../stores/editor";
 import { useLayoutStore, type ActivePanel } from "../../stores/layout";
 import { useOverlayStore, type PaletteMode } from "../../stores/overlay";
+import { chooseProject, useProjectStore } from "../../stores/project";
 import { createCommands, type Command } from "./commands";
 
 /**
@@ -33,6 +34,12 @@ export function useCommands(): readonly Command[] {
         },
         saveAllFiles: () => {
           void useEditorStore.getState().saveAll();
+        },
+        openFolder: () => {
+          void chooseProject();
+        },
+        refreshGitStatus: () => {
+          void useProjectStore.getState().refreshGitStatus();
         },
       }),
     [],

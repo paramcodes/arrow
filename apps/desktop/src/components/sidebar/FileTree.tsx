@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import type { FileEntry } from "@arrow/types";
 import { Button, Dialog, DialogContent, DialogDescription, DialogTitle } from "@arrow/ui";
@@ -12,7 +12,12 @@ import {
   renameEntry,
 } from "../../hooks/fileSystem";
 import { useFileTree } from "../../hooks/useFileTree";
+import { gitBadges } from "../../lib/git";
 import { useEditorStore } from "../../stores/editor";
+import { useProjectStore } from "../../stores/project";
+import { mergeEntries, mergeTreeCache } from "./treeOverlay";
+import { useProjectRoot } from "./useProjectRoot";
+import { useWatcherOverlay } from "./useWatcherOverlay";
 import { DiscardChangesDialog } from "../editor/DiscardChangesDialog";
 import type { FileTreeAction } from "./FileTreeContextMenu";
 import { FileTreeItem } from "./FileTreeItem";
@@ -58,14 +63,39 @@ export function FileTree() {
   const openFile = useEditorStore((state) => state.openFile);
   const closeFile = useEditorStore((state) => state.closeFile);
   const remapPath = useEditorStore((state) => state.remapPath);
+  const rootPath = useProjectStore((state) => state.rootPath);
+  const files = useProjectStore((state) => state.status.files);
 
   const [request, setRequest] = useState<TreeRequest | null>(null);
   const [discard, setDiscard] = useState<{ entry: FileEntry; names: string[] } | null>(null);
   const [name, setName] = useState("");
   const [failure, setFailure] = useState<string | null>(null);
 
-  const children = tree.cache[tree.root] ?? [];
+  // The watcher changes the tree behind its back, so the tree holds what the
+  // watcher said and merges it with the listing of the disk.
+  const overlay = useWatcherOverlay((path) => {
+    void tree.refresh(path);
+  });
+  const cache = useMemo(() => mergeTreeCache(tree.cache, overlay), [tree.cache, overlay]);
+
+  // The root of the project is the root the reader picked. The tree of the
+  // frontend knows the root of the workspace it was built for, and the hook
+  // reads the root of the project when the two are not the same.
+  const root = rootPath ?? tree.root;
+  const projectRoot = useProjectRoot(root, tree.root);
+
+  // The badge of every file of the repository is built once, so a row of the
+  // tree reads its badge out of a map and never asks the shell for the state
+  // of its own file.
+  const badges = useMemo(() => gitBadges(root, files), [root, files]);
+
+  const children =
+    root === tree.root
+      ? (cache[tree.root] ?? [])
+      : mergeEntries(projectRoot.entries, overlay, root);
   const deleting = request?.action === "delete";
+  const error = root === tree.root ? tree.error : projectRoot.error;
+  const loading = root === tree.root ? tree.loading : projectRoot.loading;
 
   const ask = (action: FileTreeAction, entry: FileEntry) => {
     setRequest({ action, entry });
@@ -141,13 +171,13 @@ export function FileTree() {
 
   return (
     <div className="flex min-h-0 flex-col" data-testid="file-tree">
-      {tree.error ? (
+      {error ? (
         <p className="p-2 text-xs text-error" data-testid="file-tree-error">
-          {tree.error}
+          {error}
         </p>
       ) : null}
 
-      {children.length === 0 && tree.loading ? (
+      {children.length === 0 && loading ? (
         <p className="p-2 text-xs text-ink-tertiary">Reading the workspace…</p>
       ) : (
         <ul role="tree" aria-label="Files" className="p-1">
@@ -156,7 +186,8 @@ export function FileTree() {
               key={entry.path}
               entry={entry}
               depth={0}
-              cache={tree.cache}
+              cache={cache}
+              badges={badges}
               expanded={tree.expanded}
               onToggle={tree.toggle}
               onOpen={(path) => {

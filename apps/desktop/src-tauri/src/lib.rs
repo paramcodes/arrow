@@ -11,21 +11,39 @@ use tauri::Manager;
 pub mod commands;
 pub mod pty;
 
+/// The file watcher of the shell. It watches a directory and reports every
+/// change of it.
+pub mod watcher;
+
 /// The terminal commands sit in `commands/terminal.rs`, beside the other
 /// commands. This session owns `lib.rs` and not `commands/mod.rs`, so the
 /// module is declared here rather than in the commands module.
 #[path = "commands/terminal.rs"]
 pub mod terminal;
 
+/// The git commands sit in `commands/git.rs`, beside the other commands, and
+/// this session owns `lib.rs` and not `commands/mod.rs`.
+#[path = "commands/git.rs"]
+pub mod git;
+
+/// The watcher commands sit in `commands/watcher.rs`, beside the other
+/// commands, and this session owns `lib.rs` and not `commands/mod.rs`. The
+/// engine they call lives in `watcher/`, so the two names differ.
+#[path = "commands/watcher.rs"]
+pub mod watcher_commands;
+
 /// Build and run the Arrow desktop shell.
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_store::Builder::new().build())
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             // One manager for the application. Its sink emits to the main
             // window, which is the only window the shell opens.
             let sink = Arc::new(pty::TauriSink::new(app.handle().clone()));
             app.manage(pty::PtyManager::new(sink));
+            // The watches of the application live as long as the shell does.
+            app.manage(watcher::WatcherRegistry::new());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -44,6 +62,11 @@ pub fn run() {
             terminal::resize_pty,
             terminal::kill_pty,
             terminal::pty_alive,
+            git::git_branch,
+            git::git_status,
+            git::git_diff_stat,
+            watcher_commands::watch_directory,
+            watcher_commands::unwatch,
         ])
         .run(tauri::generate_context!())
         .expect("the Arrow desktop shell failed to start");
@@ -81,5 +104,55 @@ mod tests {
         assert!(crate::terminal::COMMANDS.contains(&"resize_pty"));
         assert!(crate::terminal::COMMANDS.contains(&"kill_pty"));
         assert!(crate::terminal::COMMANDS.contains(&"pty_alive"));
+    }
+
+    /// The watcher and the git commands are registered on the same shell. The
+    /// lists are the five names of the frontend contract, in one place.
+    #[test]
+    fn the_watcher_and_git_commands_are_part_of_the_contract() {
+        assert_eq!(crate::watcher_commands::COMMANDS.len(), 2);
+        assert!(crate::watcher_commands::COMMANDS.contains(&"watch_directory"));
+        assert!(crate::watcher_commands::COMMANDS.contains(&"unwatch"));
+
+        assert_eq!(crate::git::COMMANDS.len(), 3);
+        assert!(crate::git::COMMANDS.contains(&"git_branch"));
+        assert!(crate::git::COMMANDS.contains(&"git_status"));
+        assert!(crate::git::COMMANDS.contains(&"git_diff_stat"));
+    }
+
+    /// The folder picker is a plugin of the shell, and the capability that
+    /// allows it lies in the tree.
+    ///
+    /// The permission of the plugin resolves only when the plugin is
+    /// registered, so the build of the shell is what proves the registration.
+    /// The capability itself proves that the picker is allowed.
+    #[test]
+    fn the_folder_picker_is_allowed() {
+        let capabilities = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("capabilities");
+        let path = capabilities.join("dialog.json");
+        let capability: serde_json::Value = serde_json::from_str(
+            &std::fs::read_to_string(&path).expect("capabilities/dialog.json"),
+        )
+        .expect("capabilities/dialog.json is valid JSON");
+
+        let permissions: Vec<String> = capability["permissions"]
+            .as_array()
+            .expect("the capability lists its permissions")
+            .iter()
+            .map(|permission| {
+                permission
+                    .as_str()
+                    .expect("a permission is a string")
+                    .to_string()
+            })
+            .collect();
+
+        assert!(
+            permissions
+                .iter()
+                .any(|permission| permission.starts_with("dialog:")),
+            "the folder picker is allowed: {permissions:?}"
+        );
+        assert_eq!(capability["windows"], serde_json::json!(["main"]));
     }
 }

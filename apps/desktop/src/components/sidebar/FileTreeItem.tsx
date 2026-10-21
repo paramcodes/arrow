@@ -3,6 +3,7 @@ import { ChevronDown, ChevronRight, FileText, Folder, FolderOpen } from "lucide-
 import type { FileEntry } from "@arrow/types";
 
 import type { DirectoryCache } from "../../hooks/useFileTree";
+import type { GitBadge } from "../../lib/git";
 import { FileTreeContextMenu, type FileTreeAction } from "./FileTreeContextMenu";
 
 /**
@@ -11,7 +12,21 @@ import { FileTreeContextMenu, type FileTreeAction } from "./FileTreeContextMenu"
  * A directory row opens and closes its children. A file row opens the file in
  * a tab. Every row carries the same context menu, so a right click on a file
  * can create a sibling and a right click on a folder can create a child.
+ *
+ * A row also carries the badge of the state of its file in the repository: an
+ * amber M for a file that changed, a green U for a file the repository does
+ * not track and a red D for a file that is gone. The badge comes from the
+ * map the tree built out of the status of the repository, so a row never asks
+ * the shell for the state of its own file.
  */
+
+/** The class of the badge of every tone of the palette. */
+const TONE_CLASS: Readonly<Record<GitBadge["tone"], string>> = {
+  warning: "text-warning",
+  success: "text-success",
+  error: "text-error",
+  info: "text-info",
+};
 
 /** The props of one row. */
 export interface FileTreeItemProps {
@@ -21,6 +36,8 @@ export interface FileTreeItemProps {
   readonly depth: number;
   /** The children of the directories that have been read. */
   readonly cache: DirectoryCache;
+  /** The badge of every file of the repository, keyed by the path of the file. */
+  readonly badges: ReadonlyMap<string, GitBadge>;
   /** The directories that are open. */
   readonly expanded: ReadonlySet<string>;
   /** The callback that opens or closes a directory. */
@@ -36,6 +53,7 @@ export function FileTreeItem({
   entry,
   depth,
   cache,
+  badges,
   expanded,
   onToggle,
   onOpen,
@@ -43,6 +61,7 @@ export function FileTreeItem({
 }: FileTreeItemProps) {
   const open = entry.isDirectory && expanded.has(entry.path);
   const children = cache[entry.path] ?? [];
+  const badge = badges.get(entry.path);
 
   return (
     <li role="treeitem" aria-expanded={entry.isDirectory ? open : undefined} aria-selected={false}>
@@ -73,7 +92,16 @@ export function FileTreeItem({
           ) : (
             <FileText aria-hidden className="size-3.5 shrink-0 text-ink-tertiary" />
           )}
-          <span className="truncate">{entry.name}</span>
+          <span className={badge?.struck ? "truncate line-through" : "truncate"}>{entry.name}</span>
+          {badge ? (
+            <span
+              className={`${TONE_CLASS[badge.tone]} ${badge.struck ? "line-through" : ""} ml-1 font-mono text-[10px]`}
+              data-testid={`tree-badge-${entry.path}`}
+              title={badge.letter}
+            >
+              {badge.letter}
+            </span>
+          ) : null}
         </button>
       </FileTreeContextMenu>
 
@@ -85,6 +113,7 @@ export function FileTreeItem({
               entry={child}
               depth={depth + 1}
               cache={cache}
+              badges={badges}
               expanded={expanded}
               onToggle={onToggle}
               onOpen={onOpen}
