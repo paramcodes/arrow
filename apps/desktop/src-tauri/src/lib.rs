@@ -21,6 +21,11 @@ pub mod watcher;
 #[path = "commands/terminal.rs"]
 pub mod terminal;
 
+/// The git commands sit in `commands/git.rs`, beside the other commands, and
+/// this session owns `lib.rs` and not `commands/mod.rs`.
+#[path = "commands/git.rs"]
+pub mod git;
+
 /// The watcher commands sit in `commands/watcher.rs`, beside the other
 /// commands, and this session owns `lib.rs` and not `commands/mod.rs`. The
 /// engine they call lives in `watcher/`, so the two names differ.
@@ -57,6 +62,9 @@ pub fn run() {
             terminal::resize_pty,
             terminal::kill_pty,
             terminal::pty_alive,
+            git::git_branch,
+            git::git_status,
+            git::git_diff_stat,
             watcher_commands::watch_directory,
             watcher_commands::unwatch,
         ])
@@ -98,13 +106,18 @@ mod tests {
         assert!(crate::terminal::COMMANDS.contains(&"pty_alive"));
     }
 
-    /// The watcher commands are registered on the shell the webview talks to.
-    /// The list is the two names of the frontend contract, in one place.
+    /// The watcher and the git commands are registered on the same shell. The
+    /// lists are the five names of the frontend contract, in one place.
     #[test]
-    fn the_watcher_commands_are_part_of_the_contract() {
+    fn the_watcher_and_git_commands_are_part_of_the_contract() {
         assert_eq!(crate::watcher_commands::COMMANDS.len(), 2);
         assert!(crate::watcher_commands::COMMANDS.contains(&"watch_directory"));
         assert!(crate::watcher_commands::COMMANDS.contains(&"unwatch"));
+
+        assert_eq!(crate::git::COMMANDS.len(), 3);
+        assert!(crate::git::COMMANDS.contains(&"git_branch"));
+        assert!(crate::git::COMMANDS.contains(&"git_status"));
+        assert!(crate::git::COMMANDS.contains(&"git_diff_stat"));
     }
 
     /// The folder picker is a plugin of the shell, and the capability that
