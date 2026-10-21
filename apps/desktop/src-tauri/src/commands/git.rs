@@ -60,18 +60,17 @@ pub struct GitDiffStat {
 }
 
 impl Serialize for GitDiffStat {
-    /// Write the counts under both spellings of the name of the first one.
+    /// Write the counts under the names the frontend reads.
     ///
-    /// The two halves of this session were written in parallel against one
-    /// contract, and the contract names the first count in snake case while
-    /// the boundary of the webview speaks camel case. The payload carries
-    /// both, so neither half can read the other one wrong.
+    /// The type of the frontend names the first count `filesChanged`, so the
+    /// shell writes it under that name and under no other. One field carries
+    /// one spelling: a payload that offers two spellings of one value leaves
+    /// every reader of it guessing which one is the contract.
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
-        let mut map = serializer.serialize_map(Some(4))?;
-        map.serialize_entry("files_changed", &self.files_changed)?;
+        let mut map = serializer.serialize_map(Some(3))?;
         map.serialize_entry("filesChanged", &self.files_changed)?;
         map.serialize_entry("insertions", &self.insertions)?;
         map.serialize_entry("deletions", &self.deletions)?;
@@ -486,7 +485,7 @@ mod tests {
     }
 
     #[test]
-    fn the_counts_of_the_diff_carry_both_spellings_of_their_name() {
+    fn the_counts_of_the_diff_carry_the_spelling_the_frontend_reads() {
         let stat = GitDiffStat {
             files_changed: 2,
             insertions: 3,
@@ -495,8 +494,11 @@ mod tests {
 
         let payload = serde_json::to_value(&stat).expect("the payload");
 
-        assert_eq!(payload["files_changed"], 2, "the snake case spelling");
-        assert_eq!(payload["filesChanged"], 2, "the camel case spelling");
+        assert_eq!(payload["filesChanged"], 2, "the spelling the frontend reads");
+        assert!(
+            payload.get("files_changed").is_none(),
+            "one field carries one spelling"
+        );
         assert_eq!(payload["insertions"], 3);
         assert_eq!(payload["deletions"], 4);
     }

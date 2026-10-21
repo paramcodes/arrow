@@ -468,15 +468,14 @@ export async function gitStatus(root: string): Promise<GitStatus | undefined> {
 /**
  * The counts of the diff of the repository at `root`.
  *
- * The shell names the first count in snake case and the contract of the
- * session names it in camel case, so the shell answers with both spellings
- * and the frontend reads whichever it finds.
+ * The shell names the first count the way the type of the frontend names it,
+ * and the reader asks for that one name. One field carries one spelling, so
+ * the payload of the shell and the type of the webview cannot drift apart.
  */
 export async function gitDiffStat(root: string): Promise<GitDiffStat | undefined> {
   if (isTauriHost()) {
     const payload = await invokeCommand<{
-      files_changed?: number;
-      filesChanged?: number;
+      filesChanged: number;
       insertions: number;
       deletions: number;
     }>("git_diff_stat", { root });
@@ -484,9 +483,9 @@ export async function gitDiffStat(root: string): Promise<GitDiffStat | undefined
     if (!payload) return undefined;
 
     return {
-      filesChanged: payload.filesChanged ?? payload.files_changed ?? 0,
-      insertions: payload.insertions ?? 0,
-      deletions: payload.deletions ?? 0,
+      filesChanged: payload.filesChanged,
+      insertions: payload.insertions,
+      deletions: payload.deletions,
     };
   }
 
