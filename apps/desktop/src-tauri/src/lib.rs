@@ -41,22 +41,13 @@ pub mod ai_commands;
 #[path = "commands/keys.rs"]
 pub mod key_commands;
 
-/// The AI feature: the client, the providers, the normalizers and the model
-/// registry live in `ai/`, and the module tree of that directory lives in
-/// `ai/mod.rs`.
-///
-/// The two halves of this feature were written at the same time against one
-/// contract, so the tree is declared here and the two files of this half are
-/// declared beside it with a path of their own. The tree keeps the names the
-/// contract fixed: `crate::ai::models` and `crate::ai::client`.
-pub mod ai;
-
 /// The context builder of the AI feature.
 ///
 /// The client, the providers and the normalizers live in `ai/` beside it, and
-/// the other half of this session owns those files. The builder and the
-/// keychain are declared here, so the module tree of the feature does not
-/// depend on the half that is written at the same time.
+/// the other half of this session owns those files and the module tree of that
+/// directory. The builder and the keychain are declared here, with a path of
+/// their own, so the tree of the feature does not depend on the half that is
+/// written at the same time.
 #[path = "ai/context.rs"]
 pub mod ai_context;
 
