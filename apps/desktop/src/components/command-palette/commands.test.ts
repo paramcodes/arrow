@@ -22,6 +22,9 @@ function actions(): CommandActions {
     saveAllFiles: vi.fn(),
     openFolder: vi.fn(),
     refreshGitStatus: vi.fn(),
+    startInlineEdit: vi.fn(),
+    acceptInlineEdit: vi.fn(),
+    rejectInlineEdit: vi.fn(),
   };
 }
 

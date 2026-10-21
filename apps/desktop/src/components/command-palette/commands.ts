@@ -1,4 +1,5 @@
 import {
+  Check,
   Files,
   FolderOpen,
   MessageSquare,
@@ -7,8 +8,10 @@ import {
   Save,
   Search,
   Settings,
+  Sparkles,
   SquareSplitHorizontal,
   Terminal,
+  X,
   type LucideIcon,
 } from "lucide-react";
 
@@ -63,6 +66,8 @@ export const SHORTCUTS = {
   openSettings: "Mod+,",
   save: "Mod+S",
   saveAll: "Mod+Shift+S",
+  inlineEdit: "Mod+K",
+  acceptInlineEdit: "Mod+Enter",
 } as const;
 
 /** One command of the shell. */
@@ -101,6 +106,12 @@ export interface CommandActions {
   readonly openFolder: () => void;
   /** Read the state of the repository of the project again. */
   readonly refreshGitStatus: () => void;
+  /** Open the prompt of the inline edit on the document the reader sees. */
+  readonly startInlineEdit: () => void;
+  /** Take the proposed edit into the document the reader sees. */
+  readonly acceptInlineEdit: () => void;
+  /** Throw the proposed edit away. */
+  readonly rejectInlineEdit: () => void;
 }
 
 /** The commands of the shell, in the order the palette lists them. */
@@ -204,6 +215,29 @@ export function createCommands(actions: CommandActions): readonly Command[] {
       icon: Terminal,
       category: "terminal",
       action: actions.toggleBottomPanel,
+    },
+    {
+      id: "ai.inlineEdit",
+      label: "AI: Edit Selection with AI",
+      shortcut: SHORTCUTS.inlineEdit,
+      icon: Sparkles,
+      category: "ai",
+      action: actions.startInlineEdit,
+    },
+    {
+      id: "ai.acceptInlineEdit",
+      label: "AI: Accept Inline Edit",
+      shortcut: SHORTCUTS.acceptInlineEdit,
+      icon: Check,
+      category: "ai",
+      action: actions.acceptInlineEdit,
+    },
+    {
+      id: "ai.rejectInlineEdit",
+      label: "AI: Reject Inline Edit",
+      icon: X,
+      category: "ai",
+      action: actions.rejectInlineEdit,
     },
   ];
 
