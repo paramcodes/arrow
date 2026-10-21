@@ -9,6 +9,7 @@ pub mod commands;
 /// Build and run the Arrow desktop shell.
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_store::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
             commands::fs::read_directory,
             commands::fs::read_file,
@@ -16,6 +17,10 @@ pub fn run() {
             commands::fs::create_entry,
             commands::fs::delete_entry,
             commands::fs::rename_entry,
+            commands::search::search_files,
+            commands::search::list_files,
+            commands::settings::load_settings,
+            commands::settings::save_settings,
         ])
         .run(tauri::generate_context!())
         .expect("the Arrow desktop shell failed to start");

@@ -3,7 +3,6 @@ import { useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 
 import { baseName } from "../../hooks/fileSystem";
-import { useEditorShortcuts } from "../../hooks/useEditorShortcuts";
 import { useEditorStore } from "../../stores/editor";
 import { Breadcrumbs } from "../editor/Breadcrumbs";
 import { DiscardChangesDialog } from "../editor/DiscardChangesDialog";
@@ -24,8 +23,6 @@ import { WelcomeTab } from "../editor/WelcomeTab";
  * the tab.
  */
 export function EditorArea() {
-  useEditorShortcuts();
-
   const paths = useEditorStore(useShallow((state) => state.openFiles.map((file) => file.path)));
   const activePath = useEditorStore((state) => state.activePath);
   const closeFile = useEditorStore((state) => state.closeFile);

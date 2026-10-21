@@ -220,6 +220,12 @@ importers:
       '@arrow/ui':
         specifier: workspace:*
         version: link:../../packages/ui
+      '@codemirror/state':
+        specifier: ^6.7.6
+        version: 6.7.6
+      '@codemirror/view':
+        specifier: ^6.43.15
+        version: 6.43.15
       '@tauri-apps/api':
         specifier: 2.12.4
         version: 2.12.4
