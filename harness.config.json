@@ -4,7 +4,7 @@
     "exec": "pnpm exec"
   },
   "minimumCriteria": 10,
-  "minimumProofs": 46,
+  "minimumProofs": 49,
   "agents": {
     "file": "AGENTS.md",
     "entryPoint": "CLAUDE.md",
@@ -991,6 +991,48 @@
         "run": "node scripts/harness-score.mjs --only local-gate",
         "exit": "nonzero",
         "contains": "pre-commit.commands.lint.run"
+      }
+    },
+    {
+      "name": "the extensions prop that is dropped after the mount is caught",
+      "write": [
+        {
+          "path": "packages/editor-core/src/sync.ts",
+          "content": "import { EditorSelection, type Extension, type Text } from \"@codemirror/state\";\n\n// The probe: a list of extensions always looks unchanged, so a prop that\n// changed after the mount never reaches the view.\nexport function sameExtensions(): boolean {\n  return true;\n}\n\nexport function selectionAfterContentChange(\n  _doc: Text,\n  selection: EditorSelection,\n  _next: Text,\n): EditorSelection {\n  return selection;\n}\n"
+        }
+      ],
+      "expect": {
+        "run": "${PM_EXEC} playwright test apps/desktop/e2e/editor.spec.ts -g \"a change of the extensions prop takes effect\"",
+        "exit": "nonzero",
+        "contains": "a change of the extensions prop takes effect"
+      }
+    },
+    {
+      "name": "a content change that loses the caret is caught",
+      "write": [
+        {
+          "path": "packages/editor-core/src/sync.ts",
+          "content": "import { EditorSelection, type Extension, type Text } from \"@codemirror/state\";\n\nexport function sameExtensions(\n  previous: readonly Extension[] | undefined,\n  next: readonly Extension[] | undefined,\n): boolean {\n  const before = previous ?? [];\n  const after = next ?? [];\n  if (before.length !== after.length) return false;\n  return before.every((extension, index) => extension === after[index]);\n}\n\n// The probe: a change of the document throws the caret to the start.\nexport function selectionAfterContentChange(\n  _doc: Text,\n  _selection: EditorSelection,\n  _next: Text,\n): EditorSelection {\n  return EditorSelection.cursor(0);\n}\n"
+        }
+      ],
+      "expect": {
+        "run": "${PM_EXEC} playwright test apps/desktop/e2e/editor.spec.ts -g \"a change of the content prop keeps the caret\"",
+        "exit": "nonzero",
+        "contains": "a change of the content prop keeps the caret"
+      }
+    },
+    {
+      "name": "the active line case fails when the active line is not painted",
+      "write": [
+        {
+          "path": "packages/editor-core/src/extensions/base.ts",
+          "content": "import {\n  autocompletion,\n  closeBrackets,\n  closeBracketsKeymap,\n  completionKeymap,\n} from \"@codemirror/autocomplete\";\nimport { defaultKeymap, history, historyKeymap, indentWithTab } from \"@codemirror/commands\";\nimport {\n  bracketMatching,\n  foldGutter,\n  foldKeymap,\n  indentOnInput,\n  syntaxHighlighting,\n} from \"@codemirror/language\";\nimport { highlightSelectionMatches, search, searchKeymap } from \"@codemirror/search\";\nimport type { Extension } from \"@codemirror/state\";\nimport { EditorState } from \"@codemirror/state\";\nimport {\n  crosshairCursor,\n  drawSelection,\n  dropCursor,\n  highlightSpecialChars,\n  keymap,\n  lineNumbers,\n  rectangularSelection,\n} from \"@codemirror/view\";\nimport { arrowKeymap } from \"./keymaps\";\nimport { arrowDarkTheme, arrowHighlightStyle } from \"./theme\";\n\n// The probe: the bundle no longer highlights the active line.\nexport const baseExtensions: readonly Extension[] = [\n  arrowDarkTheme,\n  lineNumbers(),\n  highlightSpecialChars(),\n  history(),\n  foldGutter(),\n  drawSelection(),\n  dropCursor(),\n  EditorState.allowMultipleSelections.of(true),\n  indentOnInput(),\n  syntaxHighlighting(arrowHighlightStyle, { fallback: true }),\n  bracketMatching(),\n  closeBrackets(),\n  autocompletion(),\n  rectangularSelection(),\n  crosshairCursor(),\n  highlightSelectionMatches(),\n  search({ top: true }),\n  arrowKeymap,\n  keymap.of([\n    ...closeBracketsKeymap,\n    ...defaultKeymap,\n    ...searchKeymap,\n    ...historyKeymap,\n    ...foldKeymap,\n    ...completionKeymap,\n    indentWithTab,\n  ]),\n];\n"
+        }
+      ],
+      "expect": {
+        "run": "${PM_EXEC} playwright test apps/desktop/e2e/editor.spec.ts -g \"the editor marks the active line\"",
+        "exit": "nonzero",
+        "contains": "the editor marks the active line"
       }
     }
   ],

@@ -171,10 +171,10 @@ export async function deleteEntry(path: string): Promise<void> {
   if (!isTauriHost()) {
     if (fixtureDirectories.delete(path)) {
       const prefix = `${path}/`;
-      for (const child of [...fixtureDirectories]) {
+      for (const child of Array.from(fixtureDirectories)) {
         if (child.startsWith(prefix)) fixtureDirectories.delete(child);
       }
-      for (const child of [...fixtureFiles.keys()]) {
+      for (const child of Array.from(fixtureFiles.keys())) {
         if (child.startsWith(prefix)) fixtureFiles.delete(child);
       }
       return;
@@ -204,13 +204,13 @@ export async function renameEntry(from: string, to: string): Promise<void> {
       throw new Error(`${to}: the entry already exists`);
     }
 
-    for (const path of [...fixtureDirectories]) {
+    for (const path of Array.from(fixtureDirectories)) {
       if (path === from || path.startsWith(`${from}/`)) {
         fixtureDirectories.delete(path);
         fixtureDirectories.add(`${to}${path.slice(from.length)}`);
       }
     }
-    for (const [path, text] of [...fixtureFiles.entries()]) {
+    for (const [path, text] of Array.from(fixtureFiles.entries())) {
       if (path.startsWith(`${from}/`)) {
         fixtureFiles.delete(path);
         fixtureFiles.set(`${to}${path.slice(from.length)}`, text);
