@@ -406,6 +406,8 @@ const noCrossTierStore = {
     messages: {
       crossTier:
         "This file reaches the {{tier}} tier, and it already owns the {{other}} tier. One tier per file: Zustand for workspace facts, Jotai for per-item facts, XState for async workflows.",
+      crossTierUnknown:
+        "The source of this import is not known until the code runs, so the tier boundary cannot be checked. Use a string literal so the rule can read it.",
     },
   },
   create(context) {
@@ -429,20 +431,37 @@ const noCrossTierStore = {
       owned.add(tier);
     }
 
+    /**
+     * The source of an import that cannot be resolved. The tier of such an
+     * import is unknown, and an unknown tier cannot be checked, so the rule
+     * refuses it instead of letting it through.
+     */
+    function checkUnknown(node) {
+      context.report({ node, messageId: "crossTierUnknown" });
+    }
+
     return {
       ImportDeclaration(node) {
         check(node, node.source.value);
       },
       ImportExpression(node) {
-        const source = node.source;
-        if (!source || source.type !== "Literal") return;
-        check(node, source.value);
+        const source = staticSource(node.source);
+        if (source === null) {
+          checkUnknown(node);
+          return;
+        }
+        check(node, source);
       },
       CallExpression(node) {
         if (node.callee.type !== "Identifier" || node.callee.name !== "require") return;
         const argument = node.arguments[0];
-        if (!argument || argument.type !== "Literal") return;
-        check(node, argument.value);
+        if (!argument) return;
+        const source = staticSource(argument);
+        if (source === null) {
+          checkUnknown(node);
+          return;
+        }
+        check(node, source);
       },
     };
   },

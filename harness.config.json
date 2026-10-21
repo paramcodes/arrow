@@ -4,7 +4,7 @@
     "exec": "pnpm exec"
   },
   "minimumCriteria": 10,
-  "minimumProofs": 34,
+  "minimumProofs": 36,
   "agents": {
     "file": "AGENTS.md",
     "entryPoint": "CLAUDE.md",
@@ -567,6 +567,34 @@
       }
     },
     {
+      "name": "a file reaches a state tier with a computed import",
+      "write": [
+        {
+          "path": "apps/desktop/src/__harness_probe.ts",
+          "content": "import { create } from \"zustand\";\n\nexport const probeStore = create(() => ({ count: 0 }));\n\nexport async function probe(target: string): Promise<unknown> {\n  const module = await import(target);\n  return module;\n}\n"
+        }
+      ],
+      "expect": {
+        "run": "${PM_EXEC} eslint ${PROBE} --max-warnings=0",
+        "exit": "nonzero",
+        "contains": "no-cross-tier-store"
+      }
+    },
+    {
+      "name": "a file reaches a state tier with a computed require",
+      "write": [
+        {
+          "path": "apps/desktop/src/__harness_probe.ts",
+          "content": "import { create } from \"zustand\";\n\nexport const probeStore = create(() => ({ count: 0 }));\n\nexport function probe(target: string): unknown {\n  return require(target);\n}\n"
+        }
+      ],
+      "expect": {
+        "run": "${PM_EXEC} eslint ${PROBE} --max-warnings=0",
+        "exit": "nonzero",
+        "contains": "no-cross-tier-store"
+      }
+    },
+    {
       "name": "the local gate criterion fails when the hook commands lose their run lines",
       "write": [
         {
@@ -725,7 +753,7 @@
       "write": [
         {
           "path": "harness.config.mutation.json",
-          "content": "{\"packageManager\":\"pnpm\",\"minimumProofs\":34,\"proofs\":[{\"name\":\"a component hardcodes a color\",\"write\":[],\"expect\":{\"run\":\"true\",\"exit\":\"zero\"}},{\"name\":\"a component hardcodes a color\",\"write\":[],\"expect\":{\"run\":\"true\",\"exit\":\"zero\"}}]}\n"
+          "content": "{\"packageManager\":\"pnpm\",\"minimumProofs\":36,\"proofs\":[{\"name\":\"a component hardcodes a color\",\"write\":[],\"expect\":{\"run\":\"true\",\"exit\":\"zero\"}},{\"name\":\"a component hardcodes a color\",\"write\":[],\"expect\":{\"run\":\"true\",\"exit\":\"zero\"}}]}\n"
         }
       ],
       "expect": {

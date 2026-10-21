@@ -73,6 +73,8 @@ const EXPECTED_PROOF_NAMES = [
   "the webview stores a key in browser storage",
   "the webview logs a key",
   "one file imports two state tiers",
+  "a file reaches a state tier with a computed import",
+  "a file reaches a state tier with a computed require",
   "the local gate criterion fails when the hook commands lose their run lines",
   "the ci criterion fails when the workflow stops running the harness",
   "the escape hatch criterion fails when the rules are switched off",
