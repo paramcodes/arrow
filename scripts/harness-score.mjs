@@ -23,6 +23,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { ESLint } from "eslint";
+import { parse as parseYamlText } from "yaml";
 
 const argv = process.argv.slice(2);
 const onlyFlag = argv.indexOf("--only");
@@ -148,155 +149,6 @@ function severityOf(value) {
   return undefined;
 }
 
-/**
- * A small reader for the YAML subset this repository writes: nested maps,
- * sequences of maps, inline sequences and block scalars. It exists because the
- * checks below read the structure of a workflow file, and a substring search
- * cannot tell a command that runs from a comment that mentions one.
- */
-function indentOf(line) {
-  return line.length - line.trimStart().length;
-}
-
-function nextContentLine(lines, from) {
-  for (let index = from; index < lines.length; index += 1) {
-    const trimmed = lines[index].trim();
-    if (trimmed === "" || trimmed.startsWith("#")) continue;
-    return index;
-  }
-  return -1;
-}
-
-function parseScalar(raw) {
-  const value = String(raw).trim();
-  if (value === "") return "";
-  if (value.length > 1 && value.startsWith('"') && value.endsWith('"')) return value.slice(1, -1);
-  if (value.length > 1 && value.startsWith("'") && value.endsWith("'")) return value.slice(1, -1);
-  if (value.startsWith("[") && value.endsWith("]")) {
-    const inner = value.slice(1, -1).trim();
-    if (inner === "") return [];
-    return inner.split(",").map((item) => parseScalar(item));
-  }
-  if (value === "true") return true;
-  if (value === "false") return false;
-  if (value === "null" || value === "~") return null;
-  const comment = value.indexOf(" #");
-  return comment === -1 ? value : value.slice(0, comment).trim();
-}
-
-function parseYamlMapping(lines, start, indent) {
-  const map = {};
-  let index = start;
-
-  while (index < lines.length) {
-    const content = nextContentLine(lines, index);
-    if (content === -1) {
-      index = lines.length;
-      break;
-    }
-    const line = lines[content];
-    if (indentOf(line) !== indent) break;
-    const trimmed = line.trim();
-    if (trimmed.startsWith("-")) break;
-
-    const match = trimmed.match(/^(?<key>"[^"]*"|'[^']*'|[^:]+):(?:\s+(?<value>.*))?$/);
-    if (!match) {
-      index = content + 1;
-      continue;
-    }
-
-    const key = parseScalar(match.groups.key);
-    const rawValue = (match.groups.value ?? "").trim();
-
-    if (rawValue === "") {
-      const next = nextContentLine(lines, content + 1);
-      if (next !== -1 && indentOf(lines[next]) > indent) {
-        const nested = parseYamlBlock(lines, next, indentOf(lines[next]));
-        map[key] = nested.value;
-        index = nested.index;
-      } else {
-        map[key] = null;
-        index = content + 1;
-      }
-      continue;
-    }
-
-    if (rawValue === "|" || rawValue === ">" || rawValue === "|-" || rawValue === ">-") {
-      const block = [];
-      let cursor = content + 1;
-      while (cursor < lines.length) {
-        const candidate = lines[cursor];
-        if (candidate.trim() !== "" && indentOf(candidate) <= indent) break;
-        block.push(candidate.trim());
-        cursor += 1;
-      }
-      map[key] = block.join("\n").trim();
-      index = cursor;
-      continue;
-    }
-
-    map[key] = parseScalar(rawValue);
-    index = content + 1;
-  }
-
-  return { value: map, index };
-}
-
-function parseYamlSequence(lines, start, indent) {
-  const items = [];
-  let index = start;
-
-  while (index < lines.length) {
-    const content = nextContentLine(lines, index);
-    if (content === -1) {
-      index = lines.length;
-      break;
-    }
-    const line = lines[content];
-    if (indentOf(line) !== indent) break;
-    const trimmed = line.trim();
-    if (!trimmed.startsWith("-")) break;
-
-    const rest = trimmed.slice(1).trim();
-    if (rest === "") {
-      const nested = parseYamlBlock(lines, content + 1, indent + 2);
-      items.push(nested.value);
-      index = nested.index;
-      continue;
-    }
-
-    if (/^(?:"[^"]*"|'[^']*'|[^:]+):(\s|$)/.test(rest)) {
-      const itemIndent = indent + 2;
-      const patched = lines.slice();
-      patched[content] = " ".repeat(itemIndent) + rest;
-      const nested = parseYamlBlock(patched, content, itemIndent);
-      items.push(nested.value);
-      index = nested.index;
-      continue;
-    }
-
-    items.push(parseScalar(rest));
-    index = content + 1;
-  }
-
-  return { value: items, index };
-}
-
-function parseYamlBlock(lines, start, indent) {
-  const content = nextContentLine(lines, start);
-  if (content === -1) return { value: null, index: lines.length };
-  const trimmed = lines[content].trim();
-  if (trimmed.startsWith("-")) return parseYamlSequence(lines, content, indent);
-  return parseYamlMapping(lines, content, indent);
-}
-
-function parseYaml(text) {
-  const lines = text.split("\n");
-  const first = nextContentLine(lines, 0);
-  if (first === -1) return {};
-  return parseYamlBlock(lines, first, indentOf(lines[first])).value;
-}
-
 function readPath(document, dottedPath) {
   let node = document;
   for (const segment of dottedPath.split(".")) {
@@ -317,10 +169,247 @@ function requirementHolds(text, requirement) {
   return true;
 }
 
+/**
+ * A requirement that names a run value. The path of such a requirement ends
+ * in `run`, or it names the `run` key of a step.
+ */
+function isRunRequirement(requirement) {
+  if (requirement.key === "run") return true;
+  const segments = requirement.path.split(".");
+  return segments[segments.length - 1] === "run";
+}
+
+/**
+ * The wrappers a command may sit behind and still be the command that runs.
+ * `sudo apt-get install` runs apt-get, and `pnpm exec biome format` runs
+ * biome, so the wrapper does not hide the command.
+ */
+const COMMAND_WRAPPERS = new Set(["sudo", "env", "time", "command", "npx", "corepack"]);
+const COMMAND_WRAPPER_PREFIXES = ["pnpm exec", "pnpm run", "pnpm dlx", "yarn dlx"];
+
+/** The interpreters. The script an interpreter runs is the command. */
+const INTERPRETERS = new Set(["bash", "sh", "zsh", "node", "python3"]);
+
+/** The commands that swallow the failure of the command in front of them. */
+const FAILURE_SWALLOWERS = new Set(["true", ":"]);
+
+/**
+ * The logical lines of a run value. A line that ends with a backslash
+ * continues on the next line, so the command is read as one line.
+ */
+function logicalLines(text) {
+  const lines = [];
+  let current = "";
+
+  for (const raw of String(text).split("\n")) {
+    const line = raw.trim();
+    if (current !== "") current += " ";
+    if (line.endsWith("\\")) {
+      current += line.slice(0, -1).trim();
+      continue;
+    }
+    current += line;
+    lines.push(current);
+    current = "";
+  }
+
+  if (current !== "") lines.push(current);
+  return lines;
+}
+
+/**
+ * The commands of one line. A shell line holds several commands, split by
+ * the operators that end a command. The quotes of a token are stripped, so a
+ * quoted value stays one token.
+ */
+function shellCommands(line) {
+  const commands = [];
+  let tokens = [];
+  let current = "";
+  let quote = null;
+  let started = false;
+
+  const flush = () => {
+    if (!started) return;
+    tokens.push(current);
+    current = "";
+    started = false;
+  };
+  const end = () => {
+    flush();
+    commands.push(tokens);
+    tokens = [];
+  };
+
+  for (let index = 0; index < line.length; index += 1) {
+    const character = line[index];
+
+    if (quote !== null) {
+      if (character === quote) quote = null;
+      else current += character;
+      continue;
+    }
+
+    if (character === '"' || character === "'") {
+      quote = character;
+      started = true;
+      continue;
+    }
+
+    if (character === "\\" && index + 1 < line.length) {
+      current += line[index + 1];
+      started = true;
+      index += 1;
+      continue;
+    }
+
+    if (character === "&" || character === "|" || character === ";") {
+      if (line[index + 1] === character) index += 1;
+      end();
+      continue;
+    }
+
+    if (/\s/.test(character)) {
+      flush();
+      continue;
+    }
+
+    current += character;
+    started = true;
+  }
+
+  end();
+  return commands;
+}
+
+/**
+ * The command a segment runs, with the wrapper in front of it removed. An
+ * interpreter runs a script, so the script is the command.
+ */
+function effectiveCommand(tokens) {
+  let index = 0;
+
+  while (index < tokens.length) {
+    const head = tokens[index];
+    if (COMMAND_WRAPPERS.has(head)) {
+      index += 1;
+      continue;
+    }
+    const pair = tokens.slice(index, index + 2).join(" ");
+    if (COMMAND_WRAPPER_PREFIXES.includes(pair)) {
+      index += 2;
+      continue;
+    }
+    break;
+  }
+
+  const head = tokens[index];
+  if (head !== undefined && INTERPRETERS.has(head)) {
+    return { script: tokens[index + 1], tokens: tokens.slice(index + 2) };
+  }
+  return { script: undefined, tokens: tokens.slice(index) };
+}
+
+/** True when the tokens of a command start with the tokens of the anchor. */
+function startsWithTokens(tokens, prefix) {
+  if (prefix.length === 0 || prefix.length > tokens.length) return false;
+  return prefix.every((token, index) => tokens[index] === token);
+}
+
+/**
+ * True when a command runs the anchor. The anchor has to be the command
+ * itself, not an argument of another command: `echo pnpm verify` prints the
+ * command and does not run it.
+ */
+function commandRunsAnchor(tokens, anchor, anchorTokens) {
+  const effective = effectiveCommand(tokens);
+
+  if (effective.script !== undefined) {
+    const base = effective.script.split("/").pop();
+    if (base === anchor) return true;
+    return startsWithTokens([base, ...effective.tokens], anchorTokens);
+  }
+
+  return startsWithTokens(effective.tokens, anchorTokens);
+}
+
+/** True when a command swallows the failure of the command in front of it. */
+function isFailureSwallower(tokens) {
+  if (tokens.length === 1) return FAILURE_SWALLOWERS.has(tokens[0]);
+  if (tokens.length === 2 && tokens[0] === "exit") return tokens[1] === "0";
+  return false;
+}
+
+/**
+ * True when the run value runs the anchor as a command of its own. A command
+ * that ends in `true` swallows the failure of the command in front of it, so
+ * the run value does not hold the anchor when one follows it.
+ */
+function runsCommand(text, anchor) {
+  const anchorTokens = anchor
+    .trim()
+    .split(/\s+/)
+    .filter((token) => token !== "");
+  if (anchorTokens.length === 0) return false;
+
+  for (const line of logicalLines(text)) {
+    const commands = shellCommands(line);
+    if (commands.some((command) => isFailureSwallower(command))) continue;
+    if (commands.some((command) => commandRunsAnchor(command, anchor, anchorTokens))) return true;
+  }
+
+  return false;
+}
+
+/**
+ * True when a run value holds the requirement. The first entry of `contains`
+ * is the command the run value has to run, so it has to be the executable of
+ * the step. The other entries have to appear in the run value.
+ */
+function runValueHolds(value, requirement) {
+  if (typeof value !== "string") return false;
+  if (!requirementHolds(value, requirement)) return false;
+
+  const anchor = (requirement.contains ?? [])[0];
+  if (anchor === undefined) return true;
+  return runsCommand(value, anchor);
+}
+
+/**
+ * True when a step of a workflow runs the command the requirement names. A
+ * step that never runs, because its condition is false, does not hold it.
+ */
+function stepHolds(step, requirement) {
+  if (step === null || typeof step !== "object") return false;
+  if (conditionIsFalsy(step.if)) return false;
+  return runValueHolds(step[requirement.key], requirement);
+}
+
+/** True when the condition of a step can never be true. */
+function conditionIsFalsy(condition) {
+  if (condition === false) return true;
+  if (typeof condition !== "string") return false;
+  const trimmed = condition.trim().toLowerCase();
+  return trimmed === "false" || trimmed.includes("${{ false }}");
+}
+
 function describeRequirement(requirement) {
   const parts = [];
   if (requirement.contains) parts.push(`hold ${requirement.contains.join(", ")}`);
   if (requirement.notContains) parts.push(`hold none of ${requirement.notContains.join(", ")}`);
+  return parts.join(" and ");
+}
+
+/**
+ * The requirement a run value has to meet, read as the command it has to
+ * run. The first entry of `contains` is the command, the rest are the words
+ * the run value has to hold.
+ */
+function describeRunRequirement(requirement) {
+  const [anchor, ...rest] = requirement.contains ?? [];
+  const parts = [`runs ${anchor}`];
+  if (rest.length > 0) parts.push(`holds ${rest.join(", ")}`);
+  if (requirement.notContains) parts.push(`holds none of ${requirement.notContains.join(", ")}`);
   return parts.join(" and ");
 }
 
@@ -597,12 +686,24 @@ const checks = {
 
   /**
    * Reads the structure of a YAML file and asserts what must be in it. A
-   * command that was deleted fails the check even when its key survives.
+   * command that was deleted fails the check even when its key survives, and a
+   * step that only mentions a command fails it too: the command has to be the
+   * executable of the step.
    */
   yamlStructure(check) {
     if (!existsSync(check.path)) return { ok: false, reason: `${check.path} is missing` };
 
-    const document = parseYaml(readFileSync(check.path, "utf8"));
+    let document;
+    try {
+      document = parseYamlText(readFileSync(check.path, "utf8"));
+    } catch (error) {
+      return {
+        ok: false,
+        reason: `${check.path} is not valid YAML`,
+        detail: error.message,
+      };
+    }
+
     const problems = [];
 
     for (const requirement of check.require ?? []) {
@@ -613,25 +714,38 @@ const checks = {
       }
 
       if (requirement.key === undefined) {
-        if (!requirementHolds(node, requirement)) {
+        const holds = isRunRequirement(requirement)
+          ? runValueHolds(node, requirement)
+          : requirementHolds(node, requirement);
+        if (!holds) {
           problems.push(
-            `${requirement.path} in ${check.path} does not ${describeRequirement(requirement)}`,
+            isRunRequirement(requirement)
+              ? `the run value of ${requirement.path} in ${check.path} ${describeRunRequirement(requirement)}`
+              : `${requirement.path} in ${check.path} does not ${describeRequirement(requirement)}`,
           );
         }
         continue;
       }
 
       const elements = Array.isArray(node) ? node : [node];
-      const found = elements.some(
-        (element) =>
-          element !== null &&
-          typeof element === "object" &&
-          requirementHolds(element[requirement.key], requirement),
-      );
+      const found = elements.some((element) => stepHolds(element, requirement));
       if (!found) {
         problems.push(
-          `no "${requirement.key}" in ${requirement.path} of ${check.path} does ${describeRequirement(requirement)}`,
+          isRunRequirement(requirement)
+            ? `no "${requirement.key}" in ${requirement.path} of ${check.path} ${describeRunRequirement(requirement)}`
+            : `no "${requirement.key}" in ${requirement.path} of ${check.path} does ${describeRequirement(requirement)}`,
         );
+        const values = elements
+          .map((element) =>
+            element !== null && typeof element === "object" ? element[requirement.key] : undefined,
+          )
+          .filter((value) => typeof value === "string")
+          .map((value) => JSON.stringify(value));
+        if (values.length > 0) {
+          problems.push(
+            `the "${requirement.key}" values of ${requirement.path} are ${values.join(", ")}`,
+          );
+        }
       }
     }
 
