@@ -1,6 +1,7 @@
 import { Button, Dialog, DialogContent, DialogTitle } from "@arrow/ui";
 
 import { useSettingsStore } from "../../stores/settings";
+import { AISettings } from "./AISettings";
 import { EditorSettings } from "./EditorSettings";
 import { GeneralSettings } from "./GeneralSettings";
 
@@ -42,7 +43,8 @@ export function SettingsDialog({
           </Button>
         </header>
 
-        <div className="flex flex-col gap-6 px-4 py-4">
+        <div className="flex max-h-[70vh] flex-col gap-6 overflow-y-auto px-4 py-4">
+          <AISettings />
           <GeneralSettings />
           <EditorSettings />
         </div>
