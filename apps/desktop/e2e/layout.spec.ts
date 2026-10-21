@@ -1,5 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
+import { openApp } from "./support/app";
+
 /**
  * The resize of the shell.
  *
@@ -23,7 +25,7 @@ async function sidebarWidth(page: Page) {
 }
 
 test("the handles have a box to grab", async ({ page }) => {
-  await page.goto("/");
+  await openApp(page);
 
   const handle = await box(page, "sidebar-handle");
   expect(handle.width).toBeGreaterThan(0);
@@ -35,7 +37,7 @@ test("the handles have a box to grab", async ({ page }) => {
 });
 
 test("dragging the sidebar handle resizes the sidebar", async ({ page }) => {
-  await page.goto("/");
+  await openApp(page);
 
   const before = await sidebarWidth(page);
   const handle = await box(page, "sidebar-handle");
@@ -51,7 +53,7 @@ test("dragging the sidebar handle resizes the sidebar", async ({ page }) => {
 });
 
 test("dragging the bottom handle resizes the bottom panel", async ({ page }) => {
-  await page.goto("/");
+  await openApp(page);
   await page.getByTestId("activity-terminal").click();
 
   const panel = page.getByTestId("bottom-panel-panel");
@@ -71,7 +73,7 @@ test("dragging the bottom handle resizes the bottom panel", async ({ page }) => 
 });
 
 test("the arrow keys resize the panels", async ({ page }) => {
-  await page.goto("/");
+  await openApp(page);
 
   const handle = page.getByTestId("sidebar-handle");
   await handle.focus();

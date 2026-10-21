@@ -47,6 +47,15 @@ export function useCommands(): readonly Command[] {
 }
 
 /**
+ * The attribute the document element carries while the window is ready.
+ *
+ * The window is ready when the key handler of the command registry is
+ * attached. A shortcut that arrives before that point is lost, so the window
+ * says when it is ready and a test waits for that word.
+ */
+const READY_ATTRIBUTE = "data-arrow-ready";
+
+/**
  * The keyboard shortcuts of the commands.
  *
  * One listener answers every binding of the registry, so a shortcut that the
@@ -67,6 +76,11 @@ export function useCommandShortcuts(commands: readonly Command[]): void {
     };
 
     window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
+    document.documentElement.setAttribute(READY_ATTRIBUTE, "true");
+
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      document.documentElement.removeAttribute(READY_ATTRIBUTE);
+    };
   }, [commands]);
 }

@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client";
 import { Editor, contentMarker } from "@arrow/editor-core";
 
 import { EditorPane } from "../src/components/editor/EditorPane";
+import { READY_ATTRIBUTE } from "./support/app";
 import "../src/app.css";
 
 /**
@@ -166,6 +167,14 @@ function PropsPanes() {
 
 /** The page that mounts one pane per language. */
 function Fixture() {
+  // The fixture page carries the same readiness signal as the app, so the
+  // helper that opens a page waits for one contract. The panes of the page
+  // are mounted by the time this effect runs, because the effects of a child
+  // run before the effect of its parent.
+  useEffect(() => {
+    document.documentElement.setAttribute(READY_ATTRIBUTE, "true");
+  }, []);
+
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <div

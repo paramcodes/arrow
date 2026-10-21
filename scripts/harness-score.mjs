@@ -159,6 +159,7 @@ const EXPECTED_PROOF_NAMES = [
   "the coverage criterion fails when a criterion is deleted and another is duplicated",
   "the delete confirmation of a dirty file is caught",
   "the dialog permission lives in a capability of its own",
+  "the end to end spec that navigates on its own is caught",
   "the entry point criterion fails when a rule names an unrelated path",
   "the entry point criterion fails when the browser smoke spec is gutted",
   "the entry point criterion fails when the compiler options lose their strictness",

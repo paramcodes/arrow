@@ -1,11 +1,13 @@
 import { expect, test } from "@playwright/test";
 
+import { openApp } from "./support/app";
+
 /**
  * The smoke test proves the frontend boots in a plain browser, with no Tauri
  * host present.
  */
 test("the app boots to a blank Arrow window", async ({ page }) => {
-  await page.goto("/");
+  await openApp(page);
 
   await expect(page).toHaveTitle("Arrow");
   await expect(page.getByTestId("app-root")).toBeVisible();

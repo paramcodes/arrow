@@ -1,5 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
+import { openApp } from "./support/app";
+
 /**
  * The editor of Arrow, driven in a plain browser.
  *
@@ -97,7 +99,7 @@ async function focusLine(page: Page, pane: string, line: number): Promise<void> 
 }
 
 test("the editor renders with the dark theme of Arrow", async ({ page }) => {
-  await page.goto(FIXTURE);
+  await openApp(page, FIXTURE);
 
   const editor = page.locator('[data-testid="pane-typescript"] .cm-editor');
   await expect(editor).toBeVisible();
@@ -117,7 +119,7 @@ test("the editor renders with the dark theme of Arrow", async ({ page }) => {
 });
 
 test("every language of the registry is highlighted with the palette", async ({ page }) => {
-  await page.goto(FIXTURE);
+  await openApp(page, FIXTURE);
 
   const palette = await Promise.all(
     [
@@ -147,7 +149,7 @@ test("every language of the registry is highlighted with the palette", async ({ 
 });
 
 test("every language of the registry is highlighted by its own parser", async ({ page }) => {
-  await page.goto(FIXTURE);
+  await openApp(page, FIXTURE);
 
   for (const { language, word, color } of LANGUAGE_TOKENS) {
     const painted = await wordColor(page, `pane-${language}`, word);
@@ -160,7 +162,7 @@ test("every language of the registry is highlighted by its own parser", async ({
 });
 
 test("the editor numbers the lines and shows the fold gutter", async ({ page }) => {
-  await page.goto(FIXTURE);
+  await openApp(page, FIXTURE);
 
   const pane = page.locator('[data-testid="pane-typescript"]');
   await expect(pane.locator(".cm-lineNumbers")).toBeVisible();
@@ -173,7 +175,7 @@ test("the editor numbers the lines and shows the fold gutter", async ({ page }) 
 });
 
 test("the editor marks the active line", async ({ page }) => {
-  await page.goto(FIXTURE);
+  await openApp(page, FIXTURE);
 
   const pane = page.locator('[data-testid="pane-typescript"]');
   await focusLine(page, "pane-typescript", 2);
@@ -193,7 +195,7 @@ test("the editor marks the active line", async ({ page }) => {
 });
 
 test("the editor matches the brackets", async ({ page }) => {
-  await page.goto(FIXTURE);
+  await openApp(page, FIXTURE);
 
   const pane = page.locator('[data-testid="pane-typescript"]');
   await focusLine(page, "pane-typescript", 3);
@@ -202,7 +204,7 @@ test("the editor matches the brackets", async ({ page }) => {
 });
 
 test("the editor edits, undoes and redoes", async ({ page }) => {
-  await page.goto(FIXTURE);
+  await openApp(page, FIXTURE);
 
   const pane = "pane-typescript";
   await page.locator(`[data-testid="${pane}"] .cm-content`).click();
@@ -221,7 +223,7 @@ test("the editor edits, undoes and redoes", async ({ page }) => {
 });
 
 test("the editor searches the document", async ({ page }) => {
-  await page.goto(FIXTURE);
+  await openApp(page, FIXTURE);
 
   const pane = page.locator('[data-testid="pane-typescript"]');
   await page.locator('[data-testid="pane-typescript"] .cm-content').click();
@@ -238,7 +240,7 @@ test("the editor searches the document", async ({ page }) => {
 });
 
 test("a change of the content prop keeps the caret", async ({ page }) => {
-  await page.goto(FIXTURE);
+  await openApp(page, FIXTURE);
 
   const pane = page.locator('[data-testid="pane-content"] .cm-content');
   await pane.click();
@@ -262,7 +264,7 @@ test("a change of the content prop keeps the caret", async ({ page }) => {
 });
 
 test("typing inside the editor keeps the caret where the typing put it", async ({ page }) => {
-  await page.goto(FIXTURE);
+  await openApp(page, FIXTURE);
 
   const pane = page.locator('[data-testid="pane-content"] .cm-content');
   await pane.click();
@@ -278,7 +280,7 @@ test("typing inside the editor keeps the caret where the typing put it", async (
 });
 
 test("a change of the extensions prop takes effect", async ({ page }) => {
-  await page.goto(FIXTURE);
+  await openApp(page, FIXTURE);
 
   const content = page.locator('[data-testid="pane-tools"] .cm-content');
   await expect(content).not.toHaveAttribute("data-arrow-tool", "ghost");

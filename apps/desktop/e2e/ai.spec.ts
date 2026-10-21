@@ -8,6 +8,7 @@ import type {
   AiTokenPayload,
   CompletionRequest,
 } from "../src/lib/ai";
+import { openApp } from "./support/app";
 
 /**
  * The AI boundary of the frontend.
@@ -56,7 +57,7 @@ async function calls(page: Page) {
 }
 
 test("the tokens of a completion arrive in the frontend", async ({ page }) => {
-  await page.goto("/");
+  await openApp(page);
 
   const result = await page.evaluate(async () => {
     const specifier = "/src/lib/ai.ts";
@@ -90,7 +91,7 @@ test("the tokens of a completion arrive in the frontend", async ({ page }) => {
 });
 
 test("the shell is asked for a completion with the request of the reader", async ({ page }) => {
-  await page.goto("/");
+  await openApp(page);
 
   const asked = await page.evaluate(async () => {
     const specifier = "/src/lib/ai.ts";
@@ -115,7 +116,7 @@ test("the shell is asked for a completion with the request of the reader", async
 });
 
 test("the escape of the reader ends the request through one path", async ({ page }) => {
-  await page.goto("/");
+  await openApp(page);
 
   const requestId = await page.evaluate(async () => {
     const specifier = "/src/lib/ai.ts";
@@ -140,7 +141,7 @@ test("the escape of the reader ends the request through one path", async ({ page
 });
 
 test("the frontend never holds the key of a provider", async ({ page }) => {
-  await page.goto("/");
+  await openApp(page);
 
   const answer = await page.evaluate(async () => {
     const specifier = "/src/lib/ai.ts";
@@ -157,7 +158,7 @@ test("the frontend never holds the key of a provider", async ({ page }) => {
 });
 
 test("the tokens of the stream arrive one by one", async ({ page }) => {
-  await page.goto("/");
+  await openApp(page);
 
   await page.evaluate(async () => {
     const specifier = "/src/lib/ai.ts";

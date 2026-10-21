@@ -4,7 +4,7 @@
     "exec": "pnpm exec"
   },
   "minimumCriteria": 13,
-  "minimumProofs": 64,
+  "minimumProofs": 65,
   "agents": {
     "file": "AGENTS.md",
     "entryPoint": "CLAUDE.md",
@@ -1285,6 +1285,20 @@
         "run": "${PM_EXEC} vitest run apps/desktop/src/lib/ai.test.ts",
         "exit": "nonzero",
         "contains": "the browser stub keeps no key material"
+      }
+    },
+    {
+      "name": "the end to end spec that navigates on its own is caught",
+      "write": [
+        {
+          "path": "apps/desktop/e2e/harness-probe.spec.ts",
+          "content": "import { test } from \"@playwright/test\";\n\ntest(\"the harness probe navigates on its own\", async ({ page }) => {\n  await page.goto(\"/\");\n});\n"
+        }
+      ],
+      "expect": {
+        "run": "${PM_EXEC} vitest run apps/desktop/src/e2e-readiness.test.ts",
+        "exit": "nonzero",
+        "contains": "navigates on its own"
       }
     }
   ],
