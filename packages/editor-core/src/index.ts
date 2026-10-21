@@ -30,6 +30,19 @@ export {
 } from "./extensions/ai-completions";
 export { baseExtensions } from "./extensions/base";
 export { arrowKeymap } from "./extensions/keymaps";
+export {
+  acceptInlineDiff,
+  clearInlineDiff,
+  inlineDiff,
+  inlineDiffField,
+  inlineEditRange,
+  rejectInlineDiff,
+  setInlineDiff,
+  type InlineDiff,
+  type InlineDiffOptions,
+  type InlineDiffState,
+  type InlineEditRange,
+} from "./extensions/inline-diff";
 export { selectionListener, type SelectionChange } from "./extensions/listeners";
 export { contentMarker } from "./extensions/marker";
 export { arrowDarkTheme, arrowHighlightStyle } from "./extensions/theme";
