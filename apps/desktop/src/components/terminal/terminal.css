@@ -1,0 +1,47 @@
+/**
+ * The ANSI palette of the integrated terminal.
+ *
+ * Every slot aliases a token of `packages/theme`, so the terminal and the
+ * editor read one palette. The names are the slots of xterm.js, and the theme
+ * module derives each slot from its variable, so this file is the one place
+ * the palette is spelled.
+ *
+ * Arrow has five semantic hues and sixteen ANSI slots. A slot with no hue of
+ * its own takes the nearest semantic token, and a bright slot takes the same
+ * token as its normal slot.
+ */
+
+:root {
+  --terminal-ansi-black: var(--canvas-strong);
+  --terminal-ansi-red: var(--error);
+  --terminal-ansi-green: var(--success);
+  --terminal-ansi-yellow: var(--warning);
+  --terminal-ansi-blue: var(--info);
+  --terminal-ansi-magenta: var(--accent);
+  --terminal-ansi-cyan: var(--info);
+  --terminal-ansi-white: var(--ink-secondary);
+
+  --terminal-ansi-bright-black: var(--ink-tertiary);
+  --terminal-ansi-bright-red: var(--error);
+  --terminal-ansi-bright-green: var(--success);
+  --terminal-ansi-bright-yellow: var(--warning);
+  --terminal-ansi-bright-blue: var(--info);
+  --terminal-ansi-bright-magenta: var(--accent-hover);
+  --terminal-ansi-bright-cyan: var(--info);
+  --terminal-ansi-bright-white: var(--ink);
+}
+
+/**
+ * The terminal sits in the bottom panel, so it owns the height of its host and
+ * never the scroll of the window. The canvas of xterm keeps the rounded edge
+ * of the panel.
+ */
+.arrow-terminal {
+  height: 100%;
+  padding: 4px 8px;
+}
+
+.arrow-terminal .xterm,
+.arrow-terminal .xterm-viewport {
+  background-color: transparent;
+}
