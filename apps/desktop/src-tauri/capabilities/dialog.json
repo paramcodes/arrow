@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "dialog",
+  "description": "The permission the folder picker needs. The picker opens the directory of a project, and the permission lives in a file of its own so the default capability of the shell keeps granting only the core and the store.",
+  "windows": ["main"],
+  "permissions": ["dialog:default"]
+}
