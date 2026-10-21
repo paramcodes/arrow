@@ -121,6 +121,13 @@ const EXPECTED_PROOF_NAMES = [
   "the extensions prop that is dropped after the mount is caught",
   "a content change that loses the caret is caught",
   "the active line case fails when the active line is not painted",
+  "the delete confirmation of a dirty file is caught",
+  "the theme cascade of the editor settings is caught",
+  "the behavioral criterion fails when the end to end command only prints",
+  "the artifact criterion fails when the build output misses the source",
+  "the second toolchain criterion fails when the rust gate only prints",
+  "the scorer refuses a second run while the tree lock is held",
+  "the harness fails when it takes longer than the ceiling",
 ];
 
 if (!Number.isInteger(minimumProofs) || minimumProofs < 1) {
@@ -182,6 +189,12 @@ function run(command, probe) {
       shell: true,
       cwd: root,
       stdio: ["ignore", "pipe", "pipe"],
+      env: {
+        ...process.env,
+        // The children of this run run against the same tree, so they are
+        // told that the tree is owned and must not take the lock again.
+        HARNESS_TREE_LOCK_OWNER: String(lockOwnerPid ?? process.pid),
+      },
     });
     runningChild = child;
 
@@ -244,16 +257,19 @@ const lockPath = resolveLockPath();
 function resolveLockPath() {
   const override = process.env.PROVE_LOCK_PATH;
   if (!override) {
+    // The lock is the lock of the tree, and the scorer of the harness holds
+    // the same one. A score and a proof run on one tree cannot interleave,
+    // so a run never reads a tree that a probe has half replaced.
     return path.join(
       os.tmpdir(),
-      `arrow-prove-lock-${createHash("sha256").update(root).digest("hex").slice(0, 12)}.lock`,
+      `arrow-harness-tree-lock-${createHash("sha256").update(root).digest("hex").slice(0, 12)}.lock`,
     );
   }
   return path.isAbsolute(override) ? override : path.join(root, override);
 }
 
 /** The milliseconds a run waits for the lock before it refuses to run. */
-const lockWaitMs = Number(process.env.PROVE_LOCK_WAIT_MS ?? 120_000);
+const lockWaitMs = Number(process.env.PROVE_LOCK_WAIT_MS ?? 30_000);
 
 /** The milliseconds after which a lock without a readable owner is stale. */
 const lockStaleMs = Number(process.env.PROVE_LOCK_STALE_MS ?? 60_000);
@@ -288,6 +304,40 @@ function lockOwnerIsGone() {
     return false;
   } catch (error) {
     return error.code === "ESRCH";
+  }
+}
+
+/**
+ * The name of the run that holds the lock, and how long it has held it.
+ */
+function describeLockHolder() {
+  try {
+    const holder = JSON.parse(readFileSync(lockPath, "utf8"));
+    const seconds = Math.max(0, Math.round((Date.now() - (holder.startedAt ?? Date.now())) / 1000));
+    return `the run with the pid ${holder.pid}, which has held the lock for ${seconds} seconds`;
+  } catch {
+    return "a run whose holder cannot be read";
+  }
+}
+
+/**
+ * The pid that already owns the lock of this tree, when an ancestor of this
+ * run owns it.
+ *
+ * The scorer of the harness runs the prover inside the score, so the child
+ * prover is told that the tree is already owned. The two do not wait for each
+ * other, and a proof run that a score runs cannot fight over the probe files.
+ */
+function inheritedLockOwner() {
+  const raw = process.env.HARNESS_TREE_LOCK_OWNER;
+  if (!raw) return null;
+  const pid = Number(raw);
+  if (!Number.isInteger(pid) || pid <= 0) return null;
+  try {
+    process.kill(pid, 0);
+    return pid;
+  } catch (error) {
+    return error.code === "ESRCH" ? null : pid;
   }
 }
 
@@ -350,6 +400,9 @@ function releaseLock() {
 let pendingFiles = [];
 let pendingDirectories = new Set();
 let journalWritten = false;
+
+/** The pid that owns the lock of the tree while this run runs. */
+let lockOwnerPid = null;
 
 function writeJournal() {
   try {
@@ -430,12 +483,23 @@ function onSignal(signal) {
  *
  * The lock is taken before the stale probes are repaired, so two runs can
  * never repair the same probe at the same time.
+ *
+ * A run that an ancestor of it owns the tree for does not take the lock a
+ * second time. The scorer of the harness runs the prover inside the score,
+ * and the two must not wait for each other.
  */
-if (!acquireLock()) {
-  console.error(
-    `prove: another run holds the lock of this tree and did not finish within ${lockWaitMs} ms`,
-  );
-  process.exit(1);
+const inheritedOwner = inheritedLockOwner();
+
+if (inheritedOwner !== null) {
+  lockOwnerPid = inheritedOwner;
+} else {
+  if (!acquireLock()) {
+    console.error(
+      `prove: another run holds the lock of this tree and did not finish within ${lockWaitMs} ms: ${describeLockHolder()}`,
+    );
+    process.exit(1);
+  }
+  lockOwnerPid = process.pid;
 }
 
 recoverStaleProbes();
