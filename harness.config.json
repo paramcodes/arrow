@@ -4,7 +4,7 @@
     "exec": "pnpm exec"
   },
   "minimumCriteria": 13,
-  "minimumProofs": 67,
+  "minimumProofs": 69,
   "agents": {
     "file": "AGENTS.md",
     "entryPoint": "CLAUDE.md",
@@ -1327,6 +1327,34 @@
         "run": "${PM_EXEC} vitest run apps/desktop/src/e2e-readiness.test.ts",
         "exit": "nonzero",
         "contains": "navigates on its own"
+      }
+    },
+    {
+      "name": "the inline diff that never paints the decorations is caught",
+      "write": [
+        {
+          "path": "packages/editor-core/src/extensions/inline-diff.ts",
+          "content": "import {\n  Prec,\n  StateEffect,\n  StateField,\n  type EditorState,\n  type Extension,\n  type Transaction,\n  type TransactionSpec,\n} from \"@codemirror/state\";\nimport { Decoration, EditorView, keymap } from \"@codemirror/view\";\nimport type { DecorationSet } from \"@codemirror/view\";\n\nexport interface InlineEditRange {\n  readonly from: number;\n  readonly to: number;\n  readonly original: string;\n}\n\nexport interface InlineDiff {\n  readonly from: number;\n  readonly to: number;\n  readonly original: string;\n  readonly proposed: string;\n}\n\nexport interface InlineDiffState {\n  readonly diff: InlineDiff | null;\n  readonly decorations: DecorationSet;\n}\n\nexport const setInlineDiff = StateEffect.define<InlineDiff>();\nexport const clearInlineDiff = StateEffect.define<null>();\n\nconst NO_DIFF: InlineDiffState = { diff: null, decorations: Decoration.none };\n\nfunction diffOf(transaction: Transaction): InlineDiff | null | undefined {\n  let found: InlineDiff | null | undefined;\n\n  for (const effect of transaction.effects) {\n    if (effect.is(setInlineDiff)) {\n      found = effect.value;\n    } else if (effect.is(clearInlineDiff)) {\n      found = null;\n    }\n  }\n\n  return found;\n}\n\nexport const inlineDiffField = StateField.define<InlineDiffState>({\n  create() {\n    return NO_DIFF;\n  },\n  update(value, transaction) {\n    const diff = diffOf(transaction);\n\n    if (diff !== undefined) {\n      if (diff === null) return NO_DIFF;\n      return { diff, decorations: Decoration.none };\n    }\n\n    if (value.diff === null) return value;\n    if (transaction.docChanged || transaction.selection) return NO_DIFF;\n    return value;\n  },\n});\n\nexport function inlineEditRange(state: EditorState): InlineEditRange | null {\n  const selection = state.selection.main;\n  const from = state.doc.lineAt(selection.from).from;\n  const to = state.doc.lineAt(selection.to).to;\n  const original = state.doc.sliceString(from, to);\n\n  if (original.trim() === \"\") return null;\n\n  return { from, to, original };\n}\n\nexport function acceptInlineDiff(state: EditorState): TransactionSpec | null {\n  const diff = state.field(inlineDiffField, false)?.diff ?? null;\n  if (!diff) return null;\n  if (state.doc.sliceString(diff.from, diff.to) !== diff.original) return null;\n\n  return {\n    changes: { from: diff.from, to: diff.to, insert: diff.proposed },\n    selection: { anchor: diff.from + diff.proposed.length },\n    effects: clearInlineDiff.of(null),\n  };\n}\n\nexport function rejectInlineDiff(state: EditorState): TransactionSpec | null {\n  const diff = state.field(inlineDiffField, false)?.diff ?? null;\n  if (!diff) return null;\n  return { effects: clearInlineDiff.of(null) };\n}\n\nexport interface InlineDiffOptions {\n  readonly onAccept?: (view: EditorView) => boolean;\n  readonly onReject?: (view: EditorView) => boolean;\n}\n\nexport function inlineDiff(options: InlineDiffOptions = {}): Extension {\n  return [\n    inlineDiffField,\n    Prec.highest(\n      keymap.of([\n        { key: \"Mod-Enter\", run: (view) => options.onAccept?.(view) === true },\n        { key: \"Escape\", run: (view) => options.onReject?.(view) === true },\n      ]),\n    ),\n  ];\n}\n"
+        }
+      ],
+      "expect": {
+        "run": "${PM_EXEC} vitest run packages/editor-core/src/extensions/inline-diff.test.ts",
+        "exit": "nonzero",
+        "contains": "gives the decoration of the edit to the editor"
+      }
+    },
+    {
+      "name": "the browser stub that forgets the key of a provider is caught",
+      "write": [
+        {
+          "path": "apps/desktop/src/lib/ai.ts",
+          "content": "type Call = { command: string; args: Record<string, unknown> };\n\nconst calls: Call[] = [];\n\nexport const aiStub = {\n  get commandLog() {\n    return calls;\n  },\n  get tokens() {\n    return [] as string[];\n  },\n  get done() {\n    return false;\n  },\n};\n\nexport async function startCompletion(): Promise<void> {}\n\nexport async function startInlineEdit(): Promise<void> {}\n\nexport async function cancelRequest(): Promise<void> {}\n\nexport async function setApiKey(provider: string, key: string): Promise<void> {\n  calls.push({ command: \"set_api_key\", args: { provider, key: \"[redacted]\" } });\n}\n\nexport async function hasApiKey(): Promise<boolean> {\n  return false;\n}\n\nexport async function deleteApiKey(provider: string): Promise<void> {\n  calls.push({ command: \"delete_api_key\", args: { provider } });\n}\n\nexport async function onAiToken(): Promise<() => void> {\n  return () => undefined;\n}\n\nexport async function onAiComplete(): Promise<() => void> {\n  return () => undefined;\n}\n\nexport async function onAiError(): Promise<() => void> {\n  return () => undefined;\n}\n"
+        }
+      ],
+      "expect": {
+        "run": "${PM_EXEC} vitest run apps/desktop/src/lib/ai.test.ts",
+        "exit": "nonzero",
+        "contains": "remembers that a provider has a key"
       }
     }
   ],
