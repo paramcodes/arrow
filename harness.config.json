@@ -4,7 +4,7 @@
     "exec": "pnpm exec"
   },
   "minimumCriteria": 10,
-  "minimumProofs": 49,
+  "minimumProofs": 50,
   "agents": {
     "file": "AGENTS.md",
     "entryPoint": "CLAUDE.md",
@@ -1033,6 +1033,20 @@
         "run": "${PM_EXEC} playwright test apps/desktop/e2e/editor.spec.ts -g \"the editor marks the active line\"",
         "exit": "nonzero",
         "contains": "the editor marks the active line"
+      }
+    },
+    {
+      "name": "the dialog permission lives in a capability of its own",
+      "write": [
+        {
+          "path": "apps/desktop/src-tauri/capabilities/default.json",
+          "content": "{\n  \"$schema\": \"../gen/schemas/desktop-schema.json\",\n  \"identifier\": \"default\",\n  \"description\": \"The probe: the permission of the picker sits in the capability of the shell.\",\n  \"windows\": [\"main\"],\n  \"permissions\": [\"core:default\", \"store:default\", \"dialog:default\"]\n}\n"
+        }
+      ],
+      "expect": {
+        "run": "node -e \"const fs=require('fs');const p=JSON.parse(fs.readFileSync('apps/desktop/src-tauri/capabilities/default.json','utf8'));const extra=p.permissions.filter((x)=>x.startsWith('dialog:'));if(extra.length){console.error('the default capability of the shell grants '+extra.join(' '));process.exit(1)}\"",
+        "exit": "nonzero",
+        "contains": "the default capability of the shell grants"
       }
     }
   ],
