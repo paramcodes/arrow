@@ -3,6 +3,7 @@ import {
   FolderOpen,
   MessageSquare,
   PanelLeft,
+  RefreshCw,
   Save,
   Search,
   Settings,
@@ -30,13 +31,14 @@ import { fuzzyScore } from "../../lib/fuzzy";
  */
 
 /** The category a command sits under in the palette. */
-export type CommandCategory = "file" | "edit" | "view" | "terminal" | "ai";
+export type CommandCategory = "file" | "edit" | "view" | "git" | "terminal" | "ai";
 
 /** The label of every category. */
 export const CATEGORY_LABELS: Readonly<Record<CommandCategory, string>> = {
   file: "File",
   edit: "Edit",
   view: "View",
+  git: "Git",
   terminal: "Terminal",
   ai: "AI",
 };
@@ -46,6 +48,7 @@ export const CATEGORY_ORDER: readonly CommandCategory[] = [
   "file",
   "edit",
   "view",
+  "git",
   "terminal",
   "ai",
 ];
@@ -54,6 +57,7 @@ export const CATEGORY_ORDER: readonly CommandCategory[] = [
 export const SHORTCUTS = {
   commandPalette: "Mod+Shift+P",
   quickOpen: "Mod+P",
+  openFolder: "Mod+O",
   toggleSidebar: "Mod+B",
   toggleBottomPanel: "Mod+`",
   openSettings: "Mod+,",
@@ -93,6 +97,10 @@ export interface CommandActions {
   readonly saveActiveFile: () => void;
   /** Save every dirty file. */
   readonly saveAllFiles: () => void;
+  /** Ask the reader for a folder and open it as the project. */
+  readonly openFolder: () => void;
+  /** Read the state of the repository of the project again. */
+  readonly refreshGitStatus: () => void;
 }
 
 /** The commands of the shell, in the order the palette lists them. */
@@ -121,6 +129,14 @@ export function createCommands(actions: CommandActions): readonly Command[] {
       icon: Save,
       category: "file",
       action: actions.saveAllFiles,
+    },
+    {
+      id: "file.openFolder",
+      label: "File: Open Folder…",
+      shortcut: SHORTCUTS.openFolder,
+      icon: FolderOpen,
+      category: "file",
+      action: actions.openFolder,
     },
     {
       id: "palette.commands",
@@ -173,6 +189,13 @@ export function createCommands(actions: CommandActions): readonly Command[] {
       icon: Settings,
       category: "view",
       action: actions.openSettings,
+    },
+    {
+      id: "git.refreshStatus",
+      label: "Git: Refresh Status",
+      icon: RefreshCw,
+      category: "git",
+      action: actions.refreshGitStatus,
     },
     {
       id: "terminal.toggle",

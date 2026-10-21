@@ -7,6 +7,7 @@ import { useSettingsPersistence } from "../../components/settings/useSettings";
 import { useOverlayStore } from "../../stores/overlay";
 import { ActivityBar } from "./ActivityBar";
 import { StatusBar } from "./StatusBar";
+import { useProject } from "./useProject";
 import { Workspace } from "./Workspace";
 
 /**
@@ -29,6 +30,7 @@ export function AppShell() {
 
   useCommandShortcuts(commands);
   useSettingsPersistence();
+  useProject();
 
   return (
     <TooltipProvider delayDuration={300}>
