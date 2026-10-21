@@ -280,6 +280,7 @@ export function useInlineEdit({
     endRequest();
     if (view) clearDiff(view);
     actor.send({ type: "CANCEL" });
+    setPosition(null);
   }, [actor, clearDiff, endRequest, viewRef]);
 
   // A pane that the reader leaves stops the edit it started, so a stream that
@@ -294,10 +295,12 @@ export function useInlineEdit({
   // The request that runs when the pane goes away is ended with it.
   useEffect(() => () => endRequest(), [endRequest]);
 
-  // The bar sits above the selection while the workflow runs.
+  // The bar sits above the selection while the workflow runs. A failure keeps
+  // the bar on the screen, so the reader learns why the edit did not come.
   useEffect(() => {
-    if (status === "idle") setPosition(null);
-  }, [status]);
+    const failure = actor.getSnapshot().context.error;
+    if (status === "idle" && !failure) setPosition(null);
+  }, [actor, status]);
 
   // The editor takes the focus back when the bar is not asking for anything,
   // so the keys of the reader reach the document and not the body of the page.
@@ -415,13 +418,26 @@ async function requestEdit({
       instruction,
       selection: runtime.current.original,
     });
-  } catch {
+  } catch (error) {
     if (runtime.current.requestId !== requestId) return;
     runtime.current.requestId = null;
     runtime.current.unlisten?.();
     runtime.current.unlisten = null;
-    actor.send({ type: "CANCEL" });
+    actor.send({ type: "CANCEL", error: failureMessage(error) });
     const view = viewRef.current;
     if (view) view.dispatch({ effects: clearInlineDiff.of(null) });
   }
+}
+
+/**
+ * The message of a failure of the shell.
+ *
+ * The shell answers a failure with a string and the browser throws an error,
+ * so the message of the failure is read from both shapes. The message never
+ * carries a key: the shell refuses a failure that names a secret.
+ */
+function failureMessage(error: unknown): string {
+  if (typeof error === "string" && error !== "") return error;
+  if (error instanceof Error && error.message !== "") return error.message;
+  return "The request to the model failed.";
 }

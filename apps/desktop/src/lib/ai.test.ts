@@ -133,4 +133,27 @@ describe("the AI boundary", () => {
     expect(failures).toEqual([]);
     stop();
   });
+
+  it("answers a request with a failure when it is told to fail", async () => {
+    const requestId = "request-5";
+    const failures: string[] = [];
+    const stop = await onAiError(requestId, (payload) => failures.push(payload.error));
+
+    aiStub.setFailure("there is no key for anthropic");
+
+    await startInlineEdit({
+      requestId,
+      provider: "anthropic",
+      model: "claude-sonnet-4-5",
+      instruction: "make it shorter",
+      selection: "const a = 1;",
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 200));
+
+    expect(failures, "the stub fails the way the shell fails").toEqual([
+      "there is no key for anthropic",
+    ]);
+    stop();
+  });
 });

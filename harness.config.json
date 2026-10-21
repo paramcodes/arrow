@@ -4,7 +4,7 @@
     "exec": "pnpm exec"
   },
   "minimumCriteria": 13,
-  "minimumProofs": 70,
+  "minimumProofs": 71,
   "agents": {
     "file": "AGENTS.md",
     "entryPoint": "CLAUDE.md",
@@ -1369,6 +1369,20 @@
         "run": "${PM_EXEC} playwright test apps/desktop/e2e/inline-edit.spec.ts -g \"the reader who moves the caret loses the proposal and the bar closes\"",
         "exit": "nonzero",
         "contains": "the bar closes with the proposal, so no dead answer is left on the screen"
+      }
+    },
+    {
+      "name": "the failure of the inline edit that never reaches the reader is caught",
+      "write": [
+        {
+          "path": "apps/desktop/src/components/editor/InlineEditBar.tsx",
+          "content": "import { useCallback, useEffect, useState } from \"react\";\n\nimport { Button } from \"@arrow/ui\";\n\nimport type { InlineEditStatus } from \"../../machines/inline-edit\";\nimport type { InlineEditPosition } from \"./useInlineEdit\";\n\n/**\n * The bar of the inline edit.\n *\n * The bar floats above the selection of the reader. It holds the instruction\n * while the reader writes it, it says that the model is writing while the\n * stream runs, and it offers the two answers of the reader once the proposal\n * is on the screen: the reader takes it or throws it away.\n *\n * The bar owns the draft of the instruction and nothing else. The workflow\n * lives in the machine, and the diff lives in the document.\n */\n\n/** The props of the bar. */\nexport interface InlineEditBarProps {\n  /** The state the workflow is in. */\n  readonly status: InlineEditStatus;\n  /** The message of a failure, or null when nothing failed. */\n  readonly error: string | null;\n  /** Where the bar sits, or null when the bar is closed. */\n  readonly position: InlineEditPosition | null;\n  /** Send the instruction of the reader to the shell. */\n  readonly onSubmit: (instruction: string) => void;\n  /** Leave the edit without taking it. */\n  readonly onCancel: () => void;\n  /** Take the edit into the document. */\n  readonly onAccept: () => void;\n  /** Throw the edit away. */\n  readonly onReject: () => void;\n}\n\n/** The bar of the inline edit of one document. */\nexport function InlineEditBar({\n  status,\n  error,\n  position,\n  onSubmit,\n  onCancel,\n  onAccept,\n  onReject,\n}: InlineEditBarProps) {\n  const [instruction, setInstruction] = useState(\"\");\n\n  /**\n   * The input takes the focus when it appears.\n   *\n   * The bar opens for the reader and the reader writes the instruction right\n   * away, so the field of the instruction takes the focus as soon as it is on\n   * the screen.\n   */\n  const attach = useCallback((element: HTMLInputElement | null) => {\n    if (element) element.focus();\n  }, []);\n\n  useEffect(() => {\n    if (status !== \"prompting\") return;\n    setInstruction(\"\");\n  }, [status]);\n\n  if (!position) return null;\n  if (status === \"idle\" && !error) return null;\n\n  return (\n    <div\n      className=\"fixed z-20 flex -translate-y-full items-center gap-2 rounded-md border border-border-strong bg-surface px-2 py-1.5 shadow-lg\"\n      data-status={status}\n      data-testid=\"inline-edit-bar\"\n      style={{ top: position.top, left: position.left }}\n    >\n      {status === \"prompting\" ? (\n        <>\n          <input\n            className=\"w-72 rounded-sm border border-border bg-canvas px-2 py-1 text-xs text-ink outline-none placeholder:text-ink-tertiary focus:border-accent\"\n            data-testid=\"inline-edit-input\"\n            onChange={(event) => setInstruction(event.target.value)}\n            onKeyDown={(event) => {\n              if (event.key === \"Enter\") {\n                event.preventDefault();\n                onSubmit(instruction);\n                return;\n              }\n              if (event.key === \"Escape\") {\n                event.preventDefault();\n                onCancel();\n              }\n            }}\n            placeholder=\"Describe the change…\"\n            ref={attach}\n            spellCheck={false}\n            type=\"text\"\n            value={instruction}\n          />\n          <span className=\"text-[11px] text-ink-tertiary\">Enter to send</span>\n        </>\n      ) : null}\n\n      {status === \"streaming\" ? (\n        <>\n          <span className=\"text-[11px] text-ink-secondary\">The model is writing…</span>\n          <Button data-testid=\"inline-edit-cancel\" onClick={onCancel} size=\"sm\" variant=\"ghost\">\n            Cancel\n          </Button>\n        </>\n      ) : null}\n\n      {status === \"reviewing\" ? (\n        <>\n          <span className=\"text-[11px] text-ink-secondary\">The model proposes a change</span>\n          <Button data-testid=\"inline-edit-accept\" onClick={onAccept} size=\"sm\" variant=\"default\">\n            Accept\n          </Button>\n          <Button data-testid=\"inline-edit-reject\" onClick={onReject} size=\"sm\" variant=\"outline\">\n            Reject\n          </Button>\n        </>\n      ) : null}\n\n    </div>\n  );\n}\n"
+        }
+      ],
+      "expect": {
+        "run": "${PM_EXEC} playwright test apps/desktop/e2e/inline-edit.spec.ts -g \"a failed request tells the reader why\"",
+        "exit": "nonzero",
+        "contains": "the reader learns why the request failed"
       }
     }
   ],

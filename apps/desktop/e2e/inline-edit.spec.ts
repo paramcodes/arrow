@@ -226,3 +226,32 @@ test("the reader who moves the caret loses the proposal and the bar closes", asy
     "the bar closes with the proposal, so no dead answer is left on the screen",
   ).toHaveCount(0);
 });
+
+test("a failed request tells the reader why", async ({ page }) => {
+  await openApp(page);
+  await expand(page, `${ROOT}/src`);
+  await open(page, APP);
+
+  await page.evaluate(() => {
+    const boundary = window.__arrowAi;
+    if (!boundary) throw new Error("the AI boundary is not in the page");
+    boundary.setFailure("there is no key for anthropic");
+  });
+
+  await caretOnTheFunctionLine(page);
+  await page.keyboard.press("Control+k");
+  await expect(page.getByTestId("inline-edit-bar")).toBeVisible();
+  await page.getByTestId("inline-edit-input").fill("add a comment to the line");
+  await page.getByTestId("inline-edit-input").press("Enter");
+
+  await expect(
+    page.getByTestId("inline-edit-error"),
+    "the reader learns why the request failed",
+  ).toContainText("there is no key for anthropic", { timeout: 15_000 });
+  await expect(page.locator(".cm-inline-diff-removed"), "a failure proposes nothing").toHaveCount(
+    0,
+  );
+
+  await page.getByTestId("inline-edit-dismiss").click();
+  await expect(page.getByTestId("inline-edit-bar")).toHaveCount(0);
+});

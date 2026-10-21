@@ -172,6 +172,7 @@ class AiStub {
   private readonly timers = new Map<string, ReturnType<typeof setTimeout>[]>();
   private readonly received: string[] = [];
   private readonly keys = new Set<AiProvider>();
+  private failure: string | null = null;
   private finished = false;
   private tokenDelayMs = STUB_TOKEN_DELAY_MS;
 
@@ -185,6 +186,18 @@ class AiStub {
    */
   setTokenDelay(ms: number): void {
     this.tokenDelayMs = ms;
+  }
+
+  /**
+   * Make the next request fail with this message.
+   *
+   * The shell fails a request when it cannot serve it, and the frontend has
+   * to tell the reader why. The stub fails the same way, so the browser build
+   * shows the failure the way the shell shows it. The message never carries a
+   * key, and the stub keeps no key of its own.
+   */
+  setFailure(message: string | null): void {
+    this.failure = message;
   }
 
   /** The commands the frontend sent, in order. */
@@ -259,6 +272,20 @@ class AiStub {
 
     const timers: ReturnType<typeof setTimeout>[] = [];
     this.timers.set(requestId, timers);
+
+    if (this.failure !== null) {
+      const message = this.failure;
+      this.failure = null;
+      timers.push(
+        setTimeout(() => {
+          this.finished = true;
+          for (const listener of this.listenersOf(requestId).errors) {
+            listener({ error: message });
+          }
+        }, this.tokenDelayMs),
+      );
+      return;
+    }
 
     tokens.forEach((token, index) => {
       const timer = setTimeout(
@@ -489,6 +516,8 @@ export interface AiDebug {
   readonly cancel: (requestId: string) => Promise<void>;
   /** The gap the stub waits between two tokens, in milliseconds. */
   readonly setTokenDelay: (ms: number) => void;
+  /** Make the next request fail with this message. */
+  readonly setFailure: (message: string | null) => void;
 }
 
 declare global {
@@ -527,6 +556,9 @@ if (!isTauriHost() && typeof window !== "undefined") {
     },
     setTokenDelay: (ms) => {
       aiStub.setTokenDelay(ms);
+    },
+    setFailure: (message) => {
+      aiStub.setFailure(message);
     },
   };
 }

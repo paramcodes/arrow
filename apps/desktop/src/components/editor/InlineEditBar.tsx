@@ -63,7 +63,8 @@ export function InlineEditBar({
     setInstruction("");
   }, [status]);
 
-  if (status === "idle" || !position) return null;
+  if (!position) return null;
+  if (status === "idle" && !error) return null;
 
   return (
     <div
@@ -124,6 +125,12 @@ export function InlineEditBar({
         <span className="text-[11px] text-error" data-testid="inline-edit-error">
           {error}
         </span>
+      ) : null}
+
+      {status === "idle" ? (
+        <Button data-testid="inline-edit-dismiss" onClick={onCancel} size="sm" variant="ghost">
+          Dismiss
+        </Button>
       ) : null}
     </div>
   );
