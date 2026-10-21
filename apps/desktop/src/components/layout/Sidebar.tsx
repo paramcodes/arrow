@@ -1,6 +1,8 @@
+import { FolderOpen } from "lucide-react";
 import { ScrollArea } from "@arrow/ui";
 
 import { useLayoutStore, type ActivePanel } from "../../stores/layout";
+import { chooseProject } from "../../stores/project";
 import { FileTree } from "../sidebar/FileTree";
 import { SearchPanel } from "../sidebar/SearchPanel";
 
@@ -34,8 +36,20 @@ export function Sidebar() {
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-canvas-soft" data-testid="sidebar">
-      <header className="flex h-8 shrink-0 items-center border-b border-border px-2 text-xs font-medium text-ink">
-        {TITLES[activePanel]}
+      <header className="flex h-8 shrink-0 items-center justify-between gap-2 border-b border-border px-2 text-xs font-medium text-ink">
+        <span className="truncate">{TITLES[activePanel]}</span>
+        <button
+          type="button"
+          className="shrink-0 rounded-sm p-1 text-ink-tertiary hover:bg-surface-hover hover:text-ink focus-visible:ring-1 focus-visible:ring-focus-ring focus-visible:outline-none"
+          data-testid="open-folder"
+          title="Open Folder"
+          aria-label="Open Folder"
+          onClick={() => {
+            void chooseProject();
+          }}
+        >
+          <FolderOpen className="h-3.5 w-3.5" />
+        </button>
       </header>
       {activePanel === "search" ? (
         <SearchPanel />

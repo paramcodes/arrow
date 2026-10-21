@@ -20,6 +20,8 @@ function actions(): CommandActions {
     showPanel: vi.fn(),
     saveActiveFile: vi.fn(),
     saveAllFiles: vi.fn(),
+    openFolder: vi.fn(),
+    refreshGitStatus: vi.fn(),
   };
 }
 
@@ -98,6 +100,20 @@ describe("the command registry", () => {
     command(createCommands(spies), "view.showSearch").action();
 
     expect(spies.showPanel).toHaveBeenCalledWith("search");
+  });
+
+  it("opens a folder through the picker", () => {
+    const spies = actions();
+    command(createCommands(spies), "file.openFolder").action();
+
+    expect(spies.openFolder).toHaveBeenCalledTimes(1);
+  });
+
+  it("reads the state of the repository again", () => {
+    const spies = actions();
+    command(createCommands(spies), "git.refreshStatus").action();
+
+    expect(spies.refreshGitStatus).toHaveBeenCalledTimes(1);
   });
 
   it("lists the categories in the order of the registry", () => {
