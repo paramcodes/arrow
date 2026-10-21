@@ -249,8 +249,13 @@ const journalPath = path.join(os.tmpdir(), `${journalPrefix}${process.pid}.json`
 
 /**
  * The journals of this tree that a killed run left behind.
+ *
+ * The journal of a run that is still alive belongs to that run, and a run
+ * that repairs the tree must not touch the files that run is holding. Only
+ * the journals of runs that are gone are repaired.
  */
 function journalPaths() {
+  const prefixes = [journalPrefix, `arrow-harness-tree-journal-${treeHash}-`];
   let names = [];
   try {
     names = readdirSync(os.tmpdir());
@@ -258,8 +263,24 @@ function journalPaths() {
     return [];
   }
   return names
-    .filter((name) => name.startsWith(journalPrefix) && name.endsWith(".json"))
+    .filter((name) => name.endsWith(".json") && prefixes.some((prefix) => name.startsWith(prefix)))
+    .filter((name) => !journalOwnerIsAlive(name))
     .map((name) => path.join(os.tmpdir(), name));
+}
+
+/**
+ * True when the run that wrote the journal is still alive.
+ */
+function journalOwnerIsAlive(name) {
+  const match = name.match(/-(\d+)\.json$/);
+  if (!match) return false;
+  const pid = Number(match[1]);
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return error.code !== "ESRCH";
+  }
 }
 
 /**

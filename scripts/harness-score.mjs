@@ -314,7 +314,8 @@ const journalPath = path.join(os.tmpdir(), `${journalPrefix}${process.pid}.json`
  *
  * The prover keeps its own journal, and a killed proof run leaves probe files
  * in the tree too. The scorer owns the tree while it runs, so it repairs both
- * kinds of journal before it reads a single file.
+ * kinds of journal before it reads a single file. The journal of a run that
+ * is still alive belongs to that run, and it is left alone.
  */
 function journalPaths() {
   const prefixes = [journalPrefix, `arrow-prove-journal-${treeHash}-`];
@@ -326,7 +327,23 @@ function journalPaths() {
   }
   return names
     .filter((name) => name.endsWith(".json") && prefixes.some((prefix) => name.startsWith(prefix)))
+    .filter((name) => !journalOwnerIsAlive(name))
     .map((name) => path.join(os.tmpdir(), name));
+}
+
+/**
+ * True when the run that wrote the journal is still alive.
+ */
+function journalOwnerIsAlive(name) {
+  const match = name.match(/-(\d+)\.json$/);
+  if (!match) return false;
+  const pid = Number(match[1]);
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return error.code !== "ESRCH";
+  }
 }
 
 /** The milliseconds a run waits for the lock before it refuses to run. */
