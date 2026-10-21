@@ -56,7 +56,7 @@ describe("the terminal theme", () => {
 
   it("derives the xterm slot of a bright variable", () => {
     expect(slotOfVariable("--terminal-ansi-bright-black")).toBe("brightBlack");
-    expect(slotOfVariable("--terminal-ansi-blue")).toBe("blue");
+    expect(slotOfVariable("--terminal-ansi-bright-cursor")).toBe("brightCursor");
   });
 
   it("ships a stylesheet that declares every slot and reads a token", () => {
