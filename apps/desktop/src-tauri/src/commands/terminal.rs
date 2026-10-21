@@ -187,10 +187,12 @@ mod tests {
     /// would stop the build and a wildcard would widen the shell.
     #[test]
     fn the_capability_grants_no_terminal_permission() {
-        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("capabilities/default.json");
-        let capability: serde_json::Value =
-            serde_json::from_str(&std::fs::read_to_string(&path).expect("capabilities/default.json"))
-                .expect("capabilities/default.json is valid JSON");
+        let path =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("capabilities/default.json");
+        let capability: serde_json::Value = serde_json::from_str(
+            &std::fs::read_to_string(&path).expect("capabilities/default.json"),
+        )
+        .expect("capabilities/default.json is valid JSON");
 
         let windows = capability["windows"]
             .as_array()
@@ -214,7 +216,9 @@ mod tests {
             "the shell grants only the core and store defaults"
         );
         assert!(
-            !permissions.iter().any(|permission| permission.contains("terminal")),
+            !permissions
+                .iter()
+                .any(|permission| permission.contains("terminal")),
             "the terminal commands are application commands, not permissions"
         );
     }

@@ -40,7 +40,11 @@ impl PtyManager {
 
     /// Spawn a shell and return the id of its session.
     pub fn create(&self, cols: u16, rows: u16) -> PtyResult<String> {
-        let id = format!("pty-{}-{}", std::process::id(), self.next.fetch_add(1, Ordering::Relaxed));
+        let id = format!(
+            "pty-{}-{}",
+            std::process::id(),
+            self.next.fetch_add(1, Ordering::Relaxed)
+        );
         let session = PtySession::spawn(id.clone(), cols, rows, Arc::clone(&self.sink))?;
 
         self.sessions
@@ -274,10 +278,7 @@ mod tests {
         let id = manager.create(80, 24).expect("the session starts");
 
         manager
-            .write(
-                &id,
-                "yes arrow-line | head -n 400\n",
-            )
+            .write(&id, "yes arrow-line | head -n 400\n")
             .expect("the burst is written");
 
         // Four hundred lines, and the echo of the command itself, arrive as
@@ -334,7 +335,10 @@ mod tests {
         assert!(manager.write(id, "x").is_err());
         assert!(manager.resize(id, 80, 24).is_err());
         assert!(manager.kill(id).is_err());
-        assert!(manager.write(id, "x").expect_err("no such session").contains(id));
+        assert!(manager
+            .write(id, "x")
+            .expect_err("no such session")
+            .contains(id));
     }
 
     #[test]
@@ -359,7 +363,9 @@ mod tests {
         let (manager, recorder) = manager();
         let id = manager.create(80, 24).expect("the session starts");
 
-        manager.write(&id, "exit 3\n").expect("the shell is told to exit");
+        manager
+            .write(&id, "exit 3\n")
+            .expect("the shell is told to exit");
 
         let exit = recorder.wait_for_exit(&id).expect("the exit arrived");
         assert_eq!(exit.code, 3);

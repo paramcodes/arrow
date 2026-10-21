@@ -189,8 +189,14 @@ mod tests {
 
     impl PtySink for Recorder {
         fn data(&self, id: &str, payload: &DataPayload) {
-            self.names.lock().expect("the recorder").push(data_event(id));
-            self.frames.lock().expect("the recorder").push(payload.clone());
+            self.names
+                .lock()
+                .expect("the recorder")
+                .push(data_event(id));
+            self.frames
+                .lock()
+                .expect("the recorder")
+                .push(payload.clone());
         }
 
         fn exit(&self, id: &str, payload: &ExitPayload) {
@@ -295,7 +301,10 @@ mod tests {
             "the sequence counts from one without a gap"
         );
         assert_eq!(recorder.bytes().len(), bytes, "no byte is dropped");
-        assert_eq!(recorder.exit.lock().expect("the recorder").map(|e| e.code), Some(3));
+        assert_eq!(
+            recorder.exit.lock().expect("the recorder").map(|e| e.code),
+            Some(3)
+        );
         assert_eq!(
             recorder.names.lock().expect("the recorder").last(),
             Some(&exit_event("pty-1"))
@@ -324,6 +333,9 @@ mod tests {
         streaming.await.expect("the flusher ends");
 
         assert!(recorder.frames().is_empty(), "an idle tick emits nothing");
-        assert_eq!(recorder.exit.lock().expect("the recorder").map(|e| e.code), Some(0));
+        assert_eq!(
+            recorder.exit.lock().expect("the recorder").map(|e| e.code),
+            Some(0)
+        );
     }
 }
