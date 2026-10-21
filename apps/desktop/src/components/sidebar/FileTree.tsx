@@ -3,9 +3,17 @@ import { useState } from "react";
 import type { FileEntry } from "@arrow/types";
 import { Button, Dialog, DialogContent, DialogDescription, DialogTitle } from "@arrow/ui";
 
-import { createEntry, deleteEntry, dirName, joinPath, renameEntry } from "../../hooks/fileSystem";
+import {
+  baseName,
+  createEntry,
+  deleteEntry,
+  dirName,
+  joinPath,
+  renameEntry,
+} from "../../hooks/fileSystem";
 import { useFileTree } from "../../hooks/useFileTree";
 import { useEditorStore } from "../../stores/editor";
+import { DiscardChangesDialog } from "../editor/DiscardChangesDialog";
 import type { FileTreeAction } from "./FileTreeContextMenu";
 import { FileTreeItem } from "./FileTreeItem";
 
@@ -52,6 +60,7 @@ export function FileTree() {
   const remapPath = useEditorStore((state) => state.remapPath);
 
   const [request, setRequest] = useState<TreeRequest | null>(null);
+  const [discard, setDiscard] = useState<{ entry: FileEntry; names: string[] } | null>(null);
   const [name, setName] = useState("");
   const [failure, setFailure] = useState<string | null>(null);
 
@@ -77,16 +86,27 @@ export function FileTree() {
     const trimmed = name.trim();
     if (!deleting && trimmed.length === 0) return;
 
+    if (action === "delete") {
+      const dirty = useEditorStore
+        .getState()
+        .openFiles.filter(
+          (file) =>
+            file.dirty && (file.path === entry.path || file.path.startsWith(`${entry.path}/`)),
+        )
+        .map((file) => baseName(file.path));
+
+      // A delete of open and dirty work asks the same question a tab close
+      // asks, because both throw the same work away.
+      if (dirty.length > 0) {
+        close();
+        setDiscard({ entry, names: dirty });
+        return;
+      }
+    }
+
     try {
       if (action === "delete") {
-        const parent = dirName(entry.path);
-        await deleteEntry(entry.path);
-        for (const file of useEditorStore.getState().openFiles) {
-          if (file.path === entry.path || file.path.startsWith(`${entry.path}/`)) {
-            closeFile(file.path);
-          }
-        }
-        await tree.refresh(parent);
+        await remove(entry);
       } else if (action === "rename") {
         const parent = dirName(entry.path);
         const target = joinPath(parent, trimmed);
@@ -105,6 +125,18 @@ export function FileTree() {
     } catch (error) {
       setFailure(error instanceof Error ? error.message : String(error));
     }
+  };
+
+  /** Delete an entry and drop every tab it owned, dirty or not. */
+  const remove = async (entry: FileEntry) => {
+    const parent = dirName(entry.path);
+    await deleteEntry(entry.path);
+    for (const file of useEditorStore.getState().openFiles) {
+      if (file.path === entry.path || file.path.startsWith(`${entry.path}/`)) {
+        closeFile(file.path);
+      }
+    }
+    await tree.refresh(parent);
   };
 
   return (
@@ -185,6 +217,21 @@ export function FileTree() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <DiscardChangesDialog
+        open={discard !== null}
+        names={discard?.names ?? []}
+        confirmLabel="Discard and delete"
+        onCancel={() => setDiscard(null)}
+        onConfirm={() => {
+          if (!discard) return;
+          const entry = discard.entry;
+          setDiscard(null);
+          remove(entry).catch((error: unknown) => {
+            setFailure(error instanceof Error ? error.message : String(error));
+          });
+        }}
+      />
     </div>
   );
 }

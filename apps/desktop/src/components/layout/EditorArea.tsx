@@ -1,12 +1,12 @@
 import { useState } from "react";
 
-import { Button, Dialog, DialogContent, DialogDescription, DialogTitle } from "@arrow/ui";
 import { useShallow } from "zustand/react/shallow";
 
 import { baseName } from "../../hooks/fileSystem";
 import { useEditorShortcuts } from "../../hooks/useEditorShortcuts";
 import { useEditorStore } from "../../stores/editor";
 import { Breadcrumbs } from "../editor/Breadcrumbs";
+import { DiscardChangesDialog } from "../editor/DiscardChangesDialog";
 import { EditorPane } from "../editor/EditorPane";
 import { TabBar } from "../editor/TabBar";
 import { WelcomeTab } from "../editor/WelcomeTab";
@@ -54,40 +54,15 @@ export function EditorArea() {
         )}
       </div>
 
-      <Dialog
+      <DiscardChangesDialog
         open={pendingClose !== null}
-        onOpenChange={(open) => {
-          if (!open) setPendingClose(null);
+        names={pendingClose ? [baseName(pendingClose)] : []}
+        onCancel={() => setPendingClose(null)}
+        onConfirm={() => {
+          if (pendingClose) closeFile(pendingClose);
+          setPendingClose(null);
         }}
-      >
-        <DialogContent data-testid="close-confirm">
-          <DialogTitle>Discard the changes?</DialogTitle>
-          <DialogDescription>
-            {pendingClose ? `${baseName(pendingClose)} has unsaved changes.` : ""} Closing the tab
-            discards them.
-          </DialogDescription>
-          <div className="mt-4 flex justify-end gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              data-testid="close-confirm-cancel"
-              onClick={() => setPendingClose(null)}
-            >
-              Keep editing
-            </Button>
-            <Button
-              size="sm"
-              data-testid="close-confirm-discard"
-              onClick={() => {
-                if (pendingClose) closeFile(pendingClose);
-                setPendingClose(null);
-              }}
-            >
-              Discard the changes
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      />
     </div>
   );
 }

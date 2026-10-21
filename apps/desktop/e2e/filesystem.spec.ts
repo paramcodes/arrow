@@ -194,6 +194,37 @@ test("the context menu creates, renames and deletes an entry", async ({ page }) 
   await expect(page.getByTestId(`tree-item-${renamed}`)).toHaveCount(0);
 });
 
+test("deleting an open dirty file asks before it throws the work away", async ({ page }) => {
+  await page.goto("/");
+  await expand(page, `${ROOT}/src`);
+  await open(page, UTIL);
+
+  const content = activeContent(page);
+  await content.click();
+  await page.keyboard.type("// unsaved\n");
+  await expect(page.getByTestId(`tab-dirty-${UTIL}`)).toBeVisible();
+
+  await page.getByTestId(`tree-item-${UTIL}`).click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Delete" }).click();
+  await page.getByTestId("tree-dialog-confirm").click();
+
+  await expect(page.getByTestId("close-confirm")).toBeVisible();
+  await expect(page.getByTestId("close-confirm")).toContainText("util.ts has unsaved changes.");
+
+  await page.getByTestId("close-confirm-cancel").click();
+  await expect(page.getByTestId(`tree-item-${UTIL}`)).toBeVisible();
+  await expect(page.getByTestId(`tab-${UTIL}`)).toBeVisible();
+  await expect(page.getByTestId(`tab-dirty-${UTIL}`)).toBeVisible();
+
+  await page.getByTestId(`tree-item-${UTIL}`).click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Delete" }).click();
+  await page.getByTestId("tree-dialog-confirm").click();
+  await page.getByTestId("close-confirm-discard").click();
+
+  await expect(page.getByTestId(`tree-item-${UTIL}`)).toHaveCount(0);
+  await expect(page.getByTestId(`tab-${UTIL}`)).toHaveCount(0);
+});
+
 test("the shell shows the tree, the tabs and the editor together", async ({ page }) => {
   await page.goto("/");
   await expand(page, `${ROOT}/src`);
