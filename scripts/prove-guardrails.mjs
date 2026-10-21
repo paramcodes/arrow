@@ -121,6 +121,7 @@ const EXPECTED_PROOF_NAMES = [
   "the extensions prop that is dropped after the mount is caught",
   "a content change that loses the caret is caught",
   "the active line case fails when the active line is not painted",
+  "the dialog permission lives in a capability of its own",
 ];
 
 if (!Number.isInteger(minimumProofs) || minimumProofs < 1) {
