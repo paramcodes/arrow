@@ -831,7 +831,7 @@
       "write": [
         {
           "path": "harness.config.mutation.json",
-          "content": "{\"packageManager\":\"pnpm\",\"minimumProofs\":39,\"proofs\":[{\"name\":\"a component hardcodes a color\",\"write\":[],\"expect\":{\"run\":\"true\",\"exit\":\"zero\"}},{\"name\":\"a component hardcodes a color\",\"write\":[],\"expect\":{\"run\":\"true\",\"exit\":\"zero\"}}]}\n"
+          "content": "{\"packageManager\":\"pnpm\",\"minimumProofs\":${PROOF_COUNT},\"proofs\":[{\"name\":\"a component hardcodes a color\",\"write\":[],\"expect\":{\"run\":\"true\",\"exit\":\"zero\"}},{\"name\":\"a component hardcodes a color\",\"write\":[],\"expect\":{\"run\":\"true\",\"exit\":\"zero\"}}]}\n"
         }
       ],
       "expect": {
@@ -943,6 +943,7 @@
     "The layer list is the Arrow layer list. The workspace packages under packages/ may not import the Tauri API and may not import the desktop app; the desktop app owns every Tauri call.",
     "Raise minimumCriteria when a criterion is added. Never lower it to make the score pass. The scorer holds the exact set of criterion ids, so a criterion that is deleted, renamed or duplicated fails the score.",
     "minimumProofs is the floor on the proof set, and it lives here so the scorer and the prover cannot disagree about it. It must equal the number of proof cases the prover holds. Raise it when a proof case is added. Never lower it to make the score pass, and never empty the proof set: a proof run that proves nothing fails. The prover holds the exact set of proof names, so a proof case that is deleted, renamed or duplicated fails the run.",
-    "The scorer counts the coverage check separately from the criteria, so a score of 10/10 means ten criteria passed."
+    "The scorer counts the coverage check separately from the criteria, so a score of 10/10 means ten criteria passed.",
+    "A proof case that writes a configuration of its own writes ${PROOF_COUNT} for the size of the proof set, so the payload never goes stale when a proof case is added."
   ]
 }

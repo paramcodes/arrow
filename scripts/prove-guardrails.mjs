@@ -158,6 +158,7 @@ function expand(text, probe) {
     .replaceAll("${PM}", packageManager)
     .replaceAll("${PM_EXEC}", execCommand)
     .replaceAll("${DATA_ALIAS}", alias)
+    .replaceAll("${PROOF_COUNT}", String(EXPECTED_PROOF_NAMES.length))
     .replaceAll("${PROBE}", probe ?? "");
 }
 
