@@ -123,6 +123,9 @@ const EXPECTED_PROOF_NAMES = [
   "the active line case fails when the active line is not painted",
   "the command registry that grew an action without a spy for it is caught",
   "the dialog permission lives in a capability of its own",
+  "the AI store holds no key material",
+  "the AI bridge never hands the key back",
+  "the browser stub keeps no key material",
 ];
 
 if (!Number.isInteger(minimumProofs) || minimumProofs < 1) {

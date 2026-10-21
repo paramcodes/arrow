@@ -4,7 +4,7 @@
     "exec": "pnpm exec"
   },
   "minimumCriteria": 10,
-  "minimumProofs": 51,
+  "minimumProofs": 54,
   "agents": {
     "file": "AGENTS.md",
     "entryPoint": "CLAUDE.md",
@@ -1061,6 +1061,48 @@
         "run": "node -e \"const fs=require('fs');const p=JSON.parse(fs.readFileSync('apps/desktop/src-tauri/capabilities/default.json','utf8'));const extra=p.permissions.filter((x)=>x.startsWith('dialog:'));if(extra.length){console.error('the default capability of the shell grants '+extra.join(' '));process.exit(1)}\"",
         "exit": "nonzero",
         "contains": "the default capability of the shell grants"
+      }
+    },
+    {
+      "name": "the AI store holds no key material",
+      "write": [
+        {
+          "path": "apps/desktop/src/stores/ai.ts",
+          "content": "import { create } from \"zustand\";\n\nimport type { AiProvider } from \"../lib/ai\";\n\nexport interface AiFacts {\n  readonly provider: AiProvider;\n  readonly model: string;\n  readonly completionsEnabled: boolean;\n  readonly hasKey: boolean;\n  readonly apiKey: string;\n}\n\nexport interface AiState extends AiFacts {\n  readonly setProvider: (provider: AiProvider) => void;\n  readonly setModel: (model: string) => void;\n  readonly setCompletionsEnabled: (enabled: boolean) => void;\n  readonly setHasKey: (hasKey: boolean) => void;\n}\n\nexport const DEFAULT_MODELS: Readonly<Record<AiProvider, string>> = {\n  anthropic: \"claude-sonnet-4-5\",\n  openai: \"gpt-4o\",\n  google: \"gemini-2.0-flash\",\n};\n\nexport const DEFAULT_AI_FACTS: AiFacts = {\n  provider: \"anthropic\",\n  model: DEFAULT_MODELS.anthropic,\n  completionsEnabled: true,\n  hasKey: false,\n  apiKey: \"\",\n};\n\nexport const useAiStore = create<AiState>()((set) => ({\n  ...DEFAULT_AI_FACTS,\n  setProvider: (provider) => set({ provider, model: DEFAULT_MODELS[provider] }),\n  setModel: (model) => set({ model }),\n  setCompletionsEnabled: (enabled) => set({ completionsEnabled: enabled }),\n  setHasKey: (hasKey) => set({ hasKey }),\n}));\n\nexport function resetAiStore(): void {\n  useAiStore.setState({ ...DEFAULT_AI_FACTS });\n}\n"
+        }
+      ],
+      "expect": {
+        "run": "${PM_EXEC} vitest run apps/desktop/src/stores/ai.test.ts",
+        "exit": "nonzero",
+        "contains": "the store holds no key material"
+      }
+    },
+    {
+      "name": "the AI bridge never hands the key back",
+      "write": [
+        {
+          "path": "apps/desktop/src/lib/ai.ts",
+          "content": "type Call = { command: string; args: Record<string, unknown> };\n\nconst calls: Call[] = [];\n\nexport const aiStub = {\n  get commandLog() {\n    return calls;\n  },\n  get tokens() {\n    return [] as string[];\n  },\n  get done() {\n    return false;\n  },\n};\n\nexport async function startCompletion(): Promise<void> {}\n\nexport async function startInlineEdit(): Promise<void> {}\n\nexport async function cancelRequest(): Promise<void> {}\n\nexport async function setApiKey(): Promise<void> {}\n\nexport async function hasApiKey(): Promise<boolean> {\n  return \"the-key-a-reader-typed\";\n}\n\nexport async function deleteApiKey(): Promise<void> {}\n\nexport async function onAiToken(): Promise<() => void> {\n  return () => undefined;\n}\n\nexport async function onAiComplete(): Promise<() => void> {\n  return () => undefined;\n}\n\nexport async function onAiError(): Promise<() => void> {\n  return () => undefined;\n}\n"
+        }
+      ],
+      "expect": {
+        "run": "${PM_EXEC} vitest run apps/desktop/src/lib/ai.test.ts",
+        "exit": "nonzero",
+        "contains": "the bridge never returns the key"
+      }
+    },
+    {
+      "name": "the browser stub keeps no key material",
+      "write": [
+        {
+          "path": "apps/desktop/src/lib/ai.ts",
+          "content": "type Call = { command: string; args: Record<string, unknown> };\n\nconst calls: Call[] = [];\n\nexport const aiStub = {\n  get commandLog() {\n    return calls;\n  },\n  get tokens() {\n    return [] as string[];\n  },\n  get done() {\n    return false;\n  },\n};\n\nexport async function startCompletion(): Promise<void> {}\n\nexport async function startInlineEdit(): Promise<void> {}\n\nexport async function cancelRequest(): Promise<void> {}\n\nexport async function setApiKey(provider: string, key: string): Promise<void> {\n  calls.push({ command: \"set_api_key\", args: { provider, key } });\n}\n\nexport async function hasApiKey(): Promise<boolean> {\n  return false;\n}\n\nexport async function deleteApiKey(): Promise<void> {}\n\nexport async function onAiToken(): Promise<() => void> {\n  return () => undefined;\n}\n\nexport async function onAiComplete(): Promise<() => void> {\n  return () => undefined;\n}\n\nexport async function onAiError(): Promise<() => void> {\n  return () => undefined;\n}\n"
+        }
+      ],
+      "expect": {
+        "run": "${PM_EXEC} vitest run apps/desktop/src/lib/ai.test.ts",
+        "exit": "nonzero",
+        "contains": "the browser stub keeps no key material"
       }
     }
   ],
