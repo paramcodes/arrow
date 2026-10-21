@@ -12,10 +12,12 @@
  * prove that a guardrail still holds, for example that a workspace alias
  * resolves to a real entry point.
  *
- * The script never passes while proving nothing. The proof set must hold at
- * least `minimumProofs` cases, and at least that many must run and be caught.
- * The floor lives in `harness.config.json`, so the scorer and the prover can
- * never disagree about it.
+ * The script never passes while proving nothing. The proof set must hold the
+ * exact cases the harness holds, a case that is deleted, renamed or duplicated
+ * fails the run, and `minimumProofs` must match that set. The set lives in
+ * this file and the floor lives in `harness.config.json`, so the scorer and
+ * the prover can never disagree about it and editing the config alone cannot
+ * weaken the gate.
  */
 
 import { spawn } from "node:child_process";
@@ -41,8 +43,78 @@ const alias = config.layers?.data?.alias ?? "@/db";
 const proofs = Array.isArray(config.proofs) ? config.proofs : [];
 const minimumProofs = config.minimumProofs;
 
+/**
+ * The proof cases the harness holds. The list lives in this file, not only in
+ * `harness.config.json`, so that editing the config alone cannot weaken the
+ * gate: a proof case that is deleted, renamed or duplicated fails the run.
+ *
+ * Adding a proof case is allowed. It is a deliberate act of editing this
+ * list and of raising `minimumProofs` in the same commit.
+ */
+const EXPECTED_PROOF_NAMES = [
+  "a workspace package imports the Tauri API",
+  "a workspace package imports the desktop app",
+  "a workspace package imports the desktop app by its package name",
+  "the source tree carries an inline lint config",
+  "the source tree carries a ts-expect-error",
+  "the source tree carries a skipped test",
+  "the source tree parses raw JSON",
+  "a component hardcodes a color",
+  "a component hardcodes a named color",
+  "the workspace ui alias resolves to its entry point",
+  "a component hardcodes a Tailwind default-palette utility",
+  "a component hardcodes a modern color function",
+  "a component hardcodes a bare channel triplet",
+  "a stylesheet outside the old scan bounds is scanned",
+  "a color literal inside the token package is allowed",
+  "a workspace package reaches the desktop app with a dynamic import",
+  "a workspace package reaches the desktop app with require",
+  "the webview bundle reads a key from the environment",
+  "the webview stores a key in browser storage",
+  "the webview logs a key",
+  "one file imports two state tiers",
+  "the local gate criterion fails when the hook commands lose their run lines",
+  "the ci criterion fails when the workflow stops running the harness",
+  "the escape hatch criterion fails when the rules are switched off",
+  "the ratchet criterion fails when the procedure is deleted",
+  "the mistake log criterion fails when the rows are deleted",
+  "a workspace package reaches the desktop app with a computed import",
+  "a workspace package reaches the desktop app with a template import",
+  "the entry point criterion fails when the compiler options lose their strictness",
+  "the entry point criterion fails when the browser smoke spec is gutted",
+  "the entry point criterion fails when a rule names an unrelated path",
+  "the coverage criterion fails when a criterion is deleted and another is duplicated",
+  "the prover fails when a proof case is deleted and another is duplicated",
+  "the harness fails when a command criterion runs a no-op",
+];
+
 if (!Number.isInteger(minimumProofs) || minimumProofs < 1) {
   console.error(`prove: ${configPath} must set minimumProofs to a whole number of at least 1`);
+  process.exit(1);
+}
+
+if (minimumProofs !== EXPECTED_PROOF_NAMES.length) {
+  console.error(
+    `prove: minimumProofs is ${minimumProofs}, the harness holds ${EXPECTED_PROOF_NAMES.length} proof cases`,
+  );
+  process.exit(1);
+}
+
+const names = proofs.map((proof) => proof.name);
+const nameCounts = new Map();
+for (const name of names) nameCounts.set(name, (nameCounts.get(name) ?? 0) + 1);
+
+const missingNames = EXPECTED_PROOF_NAMES.filter((name) => !nameCounts.has(name));
+const unexpectedNames = names.filter((name) => !EXPECTED_PROOF_NAMES.includes(name));
+const duplicatedNames = [...nameCounts.entries()]
+  .filter(([, count]) => count > 1)
+  .map(([name]) => name);
+
+if (missingNames.length > 0 || unexpectedNames.length > 0 || duplicatedNames.length > 0) {
+  console.error("prove: the proof set does not hold the cases the harness holds");
+  if (missingNames.length > 0) console.error(`  missing: ${missingNames.join(", ")}`);
+  if (unexpectedNames.length > 0) console.error(`  unexpected: ${unexpectedNames.join(", ")}`);
+  if (duplicatedNames.length > 0) console.error(`  duplicated: ${duplicatedNames.join(", ")}`);
   process.exit(1);
 }
 

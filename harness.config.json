@@ -4,11 +4,126 @@
     "exec": "pnpm exec"
   },
   "minimumCriteria": 10,
-  "minimumProofs": 15,
+  "minimumProofs": 34,
   "agents": {
     "file": "AGENTS.md",
     "entryPoint": "CLAUDE.md",
-    "maxLines": 100
+    "maxLines": 100,
+    "enforcement": [
+      {
+        "match": "The workspace packages never import the Tauri API",
+        "path": "eslint.arch.mjs",
+        "kind": "eslintRule",
+        "rules": ["local/no-cross-layer-import", "no-restricted-imports"],
+        "file": "packages/ui/src/probe.ts"
+      },
+      {
+        "match": "The frontend boots in a plain browser",
+        "path": "apps/desktop/e2e/smoke.spec.ts",
+        "kind": "fileShape",
+        "minLines": 8,
+        "contains": ["@playwright/test", "test(", "page.goto(", "expect("]
+      },
+      {
+        "match": "Every color comes from a token in `packages/theme`",
+        "path": "scripts/check-theme-discipline.mjs",
+        "kind": "command",
+        "run": "node scripts/check-theme-discipline.mjs",
+        "contains": "no-hardcoded-colors"
+      },
+      {
+        "match": "The source tree has no escape hatches",
+        "path": "eslint.config.mjs",
+        "kind": "eslintRule",
+        "rules": [
+          "local/no-inline-config",
+          "local/no-raw-json-parse",
+          "@typescript-eslint/ban-ts-comment"
+        ],
+        "file": "apps/desktop/src/probe.ts"
+      },
+      {
+        "match": "TypeScript is strict in every workspace",
+        "path": "tsconfig.base.json",
+        "kind": "tsconfig",
+        "flags": {
+          "strict": true,
+          "noImplicitAny": true,
+          "noUncheckedIndexedAccess": true,
+          "exactOptionalPropertyTypes": true,
+          "noImplicitOverride": true,
+          "noImplicitReturns": true,
+          "noFallthroughCasesInSwitch": true,
+          "noUnusedLocals": true,
+          "noUnusedParameters": true
+        },
+        "impliedFlags": ["noImplicitAny"]
+      },
+      {
+        "match": "API keys never enter the webview",
+        "path": "eslint.config.mjs",
+        "kind": "eslintRule",
+        "rules": ["local/no-secret-in-webview"],
+        "file": "apps/desktop/src/probe.ts"
+      },
+      {
+        "match": "Workspace facts live in Zustand",
+        "path": "eslint.config.mjs",
+        "kind": "eslintRule",
+        "rules": ["local/no-cross-tier-store"],
+        "file": "apps/desktop/src/probe.ts"
+      },
+      {
+        "match": "Every rule in this file names the path that enforces it",
+        "path": "scripts/harness-score.mjs",
+        "kind": "criterion",
+        "criterion": "entry-point"
+      },
+      {
+        "match": "Every mistake earns a permanent check",
+        "path": "scripts/prove-guardrails.mjs",
+        "kind": "criterion",
+        "criterion": "proofs"
+      },
+      {
+        "match": "A mistake that returns after its guardrail existed",
+        "path": "scripts/harness-score.mjs",
+        "kind": "criterion",
+        "criterion": "ratchet"
+      },
+      {
+        "match": "The pre-commit gate runs format, lint and typecheck",
+        "path": "lefthook.yml",
+        "kind": "yamlStructure",
+        "require": [
+          { "path": "pre-commit.commands.branch.run", "contains": ["guard-branch.sh"] },
+          {
+            "path": "pre-commit.commands.format-check.run",
+            "contains": ["biome format", "{staged_files}"]
+          },
+          { "path": "pre-commit.commands.lint.run", "contains": ["eslint", "{staged_files}"] },
+          { "path": "pre-commit.commands.typecheck.run", "contains": ["pnpm typecheck"] }
+        ]
+      },
+      {
+        "match": "CI runs the same canonical commands",
+        "path": ".github/workflows/ci.yml",
+        "kind": "yamlStructure",
+        "require": [
+          { "path": "jobs.verify.steps", "key": "run", "contains": ["pnpm verify"] },
+          { "path": "jobs.verify.steps", "key": "run", "contains": ["pnpm prove"] },
+          { "path": "jobs.verify.steps", "key": "run", "contains": ["pnpm harness"] },
+          { "path": "jobs.rust.steps", "key": "run", "contains": ["cargo test"] }
+        ]
+      },
+      {
+        "match": "Work happens on a task branch",
+        "path": "scripts/guard-branch.sh",
+        "kind": "fileShape",
+        "minLines": 10,
+        "patterns": ["main\\|master", "exit 1", "git rev-parse"]
+      }
+    ]
   },
   "layers": {
     "data": {
@@ -42,56 +157,113 @@
     {
       "id": "proofs",
       "why": "every guardrail catches the mistake it was made for",
-      "check": { "type": "command", "run": "${PM} prove" }
+      "check": { "type": "command", "run": "${PM} prove", "contains": ", 0 missed" }
     },
     {
       "id": "escape-hatches",
       "why": "inline lint config, ts-expect-error and skipped tests are errors in the source tree",
       "check": {
-        "type": "fileContains",
-        "path": "eslint.config.mjs",
-        "contains": ["noInlineConfig", "ban-ts-comment", "no-skipped-tests"]
+        "type": "eslintRules",
+        "require": [
+          {
+            "file": "apps/desktop/src/probe.ts",
+            "rules": [
+              "local/no-inline-config",
+              "local/no-raw-json-parse",
+              "@typescript-eslint/ban-ts-comment"
+            ],
+            "ruleOptions": {
+              "@typescript-eslint/ban-ts-comment": {
+                "ts-expect-error": true,
+                "ts-ignore": true,
+                "ts-nocheck": true
+              }
+            },
+            "linterOptions": ["noInlineConfig"]
+          },
+          {
+            "file": "apps/desktop/src/probe.test.ts",
+            "rules": ["local/no-skipped-tests"]
+          }
+        ]
       }
     },
     {
       "id": "entry-point",
-      "why": "every rule in AGENTS.md names an enforcement path, and that path exists",
+      "why": "every rule in AGENTS.md names an enforcement path that can fail, and that path is live",
       "check": { "type": "agentsFile" }
     },
     {
       "id": "local-gate",
       "why": "a broken change fails before it reaches the branch",
       "check": {
-        "type": "fileContains",
+        "type": "yamlStructure",
         "path": "lefthook.yml",
-        "contains": ["pre-commit:", "lint:", "typecheck:", "staged_files"]
+        "require": [
+          { "path": "pre-commit.commands.branch.run", "contains": ["guard-branch.sh"] },
+          {
+            "path": "pre-commit.commands.format-check.run",
+            "contains": ["biome format", "{staged_files}"]
+          },
+          { "path": "pre-commit.commands.lint.run", "contains": ["eslint", "{staged_files}"] },
+          { "path": "pre-commit.commands.typecheck.run", "contains": ["pnpm typecheck"] }
+        ]
       }
     },
     {
       "id": "ci",
       "why": "the merge gate runs the canonical commands and scores the harness",
       "check": {
-        "type": "fileContains",
+        "type": "yamlStructure",
         "path": ".github/workflows/ci.yml",
-        "contains": ["harness"]
+        "require": [
+          { "path": "jobs.verify.steps", "key": "run", "contains": ["pnpm verify"] },
+          { "path": "jobs.verify.steps", "key": "run", "contains": ["pnpm prove"] },
+          { "path": "jobs.verify.steps", "key": "run", "contains": ["pnpm harness"] },
+          { "path": "jobs.rust.steps", "key": "run", "contains": ["cargo test"] },
+          {
+            "path": "jobs.rust.steps",
+            "key": "run",
+            "contains": ["apt-get install", "libayatana-appindicator3-dev"],
+            "notContains": ["libappindicator3-dev"]
+          }
+        ]
       }
     },
     {
       "id": "ratchet",
       "why": "the procedure that turns a mistake into a permanent check is written down",
       "check": {
-        "type": "fileContains",
+        "type": "markdownSections",
         "path": "docs/ratchet.md",
-        "contains": ["strongest layer", "proof case", "log row"]
+        "sections": [
+          {
+            "heading": "## 1. Fix at the strongest layer",
+            "minLines": 10,
+            "contains": ["lint rule", "architecture boundary", "Documentation in"]
+          },
+          {
+            "heading": "## 2. Add a proof case",
+            "minLines": 5,
+            "contains": ["proofs", "harness.config.json"]
+          },
+          {
+            "heading": "## 3. Add a log row",
+            "minLines": 4,
+            "contains": ["docs/mistake-log.md"]
+          }
+        ]
       }
     },
     {
       "id": "mistake-log",
-      "why": "mistakes are recorded in a shape a reader can scan",
+      "why": "mistakes are recorded in a shape a reader can scan, and every row names a guardrail that exists",
       "check": {
-        "type": "fileContains",
+        "type": "markdownTable",
         "path": "docs/mistake-log.md",
-        "contains": ["Mistake", "Guardrail"]
+        "minRows": 10,
+        "columns": 5,
+        "pathColumns": [4]
       }
     },
     {
@@ -309,13 +481,279 @@
         "exit": "zero",
         "contains": "no-hardcoded-colors"
       }
+    },
+    {
+      "name": "a workspace package reaches the desktop app with a dynamic import",
+      "write": [
+        {
+          "path": "packages/editor-core/src/__harness_probe.ts",
+          "content": "export async function probe(): Promise<unknown> {\n  const module = await import(\"../../../apps/desktop/src/App\");\n  return module;\n}\n"
+        }
+      ],
+      "expect": {
+        "run": "${PM_EXEC} eslint --config eslint.arch.mjs ${PROBE} --max-warnings=0",
+        "exit": "nonzero",
+        "contains": "no-cross-layer-import"
+      }
+    },
+    {
+      "name": "a workspace package reaches the desktop app with require",
+      "write": [
+        {
+          "path": "packages/editor-core/src/__harness_probe.ts",
+          "content": "const desktop = require(\"../../../apps/desktop/src/App\");\n\nexport const probe = desktop;\n"
+        }
+      ],
+      "expect": {
+        "run": "${PM_EXEC} eslint --config eslint.arch.mjs ${PROBE} --max-warnings=0",
+        "exit": "nonzero",
+        "contains": "no-cross-layer-import"
+      }
+    },
+    {
+      "name": "the webview bundle reads a key from the environment",
+      "write": [
+        {
+          "path": "apps/desktop/src/__harness_probe.ts",
+          "content": "export const probeKey = import.meta.env.VITE_API_KEY;\n"
+        }
+      ],
+      "expect": {
+        "run": "${PM_EXEC} eslint ${PROBE} --max-warnings=0",
+        "exit": "nonzero",
+        "contains": "no-secret-in-webview"
+      }
+    },
+    {
+      "name": "the webview stores a key in browser storage",
+      "write": [
+        {
+          "path": "apps/desktop/src/__harness_probe.ts",
+          "content": "export function probeStore(apiKey: string): void {\n  localStorage.setItem(\"apiKey\", apiKey);\n}\n"
+        }
+      ],
+      "expect": {
+        "run": "${PM_EXEC} eslint ${PROBE} --max-warnings=0",
+        "exit": "nonzero",
+        "contains": "no-secret-in-webview"
+      }
+    },
+    {
+      "name": "the webview logs a key",
+      "write": [
+        {
+          "path": "apps/desktop/src/__harness_probe.ts",
+          "content": "export function probeLog(apiKey: string): void {\n  console.error(\"key\", apiKey);\n}\n"
+        }
+      ],
+      "expect": {
+        "run": "${PM_EXEC} eslint ${PROBE} --max-warnings=0",
+        "exit": "nonzero",
+        "contains": "no-secret-in-webview"
+      }
+    },
+    {
+      "name": "one file imports two state tiers",
+      "write": [
+        {
+          "path": "apps/desktop/src/__harness_probe.ts",
+          "content": "import { atom } from \"jotai\";\nimport { create } from \"zustand\";\n\nexport const probeAtom = atom(0);\nexport const probeStore = create(() => ({ count: 0 }));\n"
+        }
+      ],
+      "expect": {
+        "run": "${PM_EXEC} eslint ${PROBE} --max-warnings=0",
+        "exit": "nonzero",
+        "contains": "no-cross-tier-store"
+      }
+    },
+    {
+      "name": "the local gate criterion fails when the hook commands lose their run lines",
+      "write": [
+        {
+          "path": "lefthook.yml",
+          "content": "# The local gate. The pre-commit gate runs format, lint and typecheck on the staged_files.\n\npre-commit:\n  parallel: true\n  commands:\n    branch:\n      # run: bash scripts/guard-branch.sh\n    format-check:\n      glob: \"**/*.{ts,tsx,js,mjs,cjs,json,css}\"\n      # run: pnpm exec biome format {staged_files}\n    lint:\n      glob: \"**/*.{ts,tsx}\"\n      # run: pnpm exec eslint --max-warnings=0 {staged_files}\n    typecheck:\n      # run: pnpm typecheck\n"
+        }
+      ],
+      "expect": {
+        "run": "node scripts/harness-score.mjs --only local-gate",
+        "exit": "nonzero",
+        "contains": "local-gate"
+      }
+    },
+    {
+      "name": "the ci criterion fails when the workflow stops running the harness",
+      "write": [
+        {
+          "path": ".github/workflows/ci.yml",
+          "content": "name: CI\n\non:\n  push:\n    branches: [main, master]\n  pull_request:\n\njobs:\n  verify:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - name: Verify\n        run: pnpm verify\n      - name: Prove the guardrails\n        run: pnpm prove\n      # the harness scores the criteria\n"
+        }
+      ],
+      "expect": {
+        "run": "node scripts/harness-score.mjs --only ci",
+        "exit": "nonzero",
+        "contains": "ci"
+      }
+    },
+    {
+      "name": "the escape hatch criterion fails when the rules are switched off",
+      "write": [
+        {
+          "path": "eslint.config.mjs",
+          "content": "import js from \"@eslint/js\";\nimport { defineConfig, globalIgnores } from \"eslint/config\";\n\nimport arch from \"./eslint.arch.mjs\";\nimport { plugin as localPlugin } from \"./eslint-rules/index.mjs\";\n\nexport default defineConfig([\n  globalIgnores([\"**/node_modules/**\", \"**/dist/**\"]),\n  js.configs.recommended,\n  arch,\n  {\n    files: [\"apps/*/src/**/*.{ts,tsx}\", \"packages/*/src/**/*.{ts,tsx}\"],\n    linterOptions: {\n      // noInlineConfig: true,\n      reportUnusedDisableDirectives: \"error\",\n    },\n    plugins: {\n      local: localPlugin,\n    },\n    rules: {\n      // \"local/no-inline-config\": \"error\",\n      // \"@typescript-eslint/ban-ts-comment\": [\"error\", { \"ts-expect-error\": true }],\n    },\n  },\n  {\n    files: [\"**/*.test.{ts,tsx}\", \"**/*.spec.{ts,tsx}\"],\n    rules: {\n      // \"local/no-skipped-tests\": \"error\",\n    },\n  },\n]);\n"
+        }
+      ],
+      "expect": {
+        "run": "node scripts/harness-score.mjs --only escape-hatches",
+        "exit": "nonzero",
+        "contains": "escape-hatches"
+      }
+    },
+    {
+      "name": "the ratchet criterion fails when the procedure is deleted",
+      "write": [
+        {
+          "path": "docs/ratchet.md",
+          "content": "# Ratchet\n\nA ratchet turns a mistake into a check that fails without a human noticing.\n\nThe strongest layer holds the rule. Every mistake needs a proof case and a log row.\n"
+        }
+      ],
+      "expect": {
+        "run": "node scripts/harness-score.mjs --only ratchet",
+        "exit": "nonzero",
+        "contains": "ratchet"
+      }
+    },
+    {
+      "name": "the mistake log criterion fails when the rows are deleted",
+      "write": [
+        {
+          "path": "docs/mistake-log.md",
+          "content": "# Mistake log\n\nEvery Mistake earns a Guardrail.\n\n| Date | Mistake | How it slipped through | Fix | Guardrail now |\n| --- | --- | --- | --- | --- |\n"
+        }
+      ],
+      "expect": {
+        "run": "node scripts/harness-score.mjs --only mistake-log",
+        "exit": "nonzero",
+        "contains": "mistake-log"
+      }
+    },
+    {
+      "name": "a workspace package reaches the desktop app with a computed import",
+      "write": [
+        {
+          "path": "packages/editor-core/src/__harness_probe.ts",
+          "content": "export async function probe(target: string): Promise<unknown> {\n  const module = await import(target);\n  return module;\n}\n"
+        }
+      ],
+      "expect": {
+        "run": "${PM_EXEC} eslint --config eslint.arch.mjs ${PROBE} --max-warnings=0",
+        "exit": "nonzero",
+        "contains": "no-cross-layer-import"
+      }
+    },
+    {
+      "name": "a workspace package reaches the desktop app with a template import",
+      "write": [
+        {
+          "path": "packages/editor-core/src/__harness_probe.ts",
+          "content": "export async function probe(): Promise<unknown> {\n  const module = await import(`../../../apps/desktop/src/App`);\n  return module;\n}\n"
+        }
+      ],
+      "expect": {
+        "run": "${PM_EXEC} eslint --config eslint.arch.mjs ${PROBE} --max-warnings=0",
+        "exit": "nonzero",
+        "contains": "no-cross-layer-import"
+      }
+    },
+    {
+      "name": "the entry point criterion fails when the compiler options lose their strictness",
+      "write": [
+        {
+          "path": "tsconfig.base.json",
+          "content": "{\n  \"$schema\": \"https://json.schemastore.org/tsconfig\",\n  \"compilerOptions\": {\n    \"target\": \"ES2022\",\n    \"lib\": [\"ES2023\", \"DOM\", \"DOM.Iterable\"],\n    \"module\": \"ESNext\",\n    \"moduleResolution\": \"Bundler\",\n    \"moduleDetection\": \"force\",\n    \"jsx\": \"react-jsx\",\n    \"strict\": true,\n    \"noImplicitAny\": false,\n    \"noUncheckedIndexedAccess\": true,\n    \"exactOptionalPropertyTypes\": true,\n    \"noImplicitOverride\": true,\n    \"noImplicitReturns\": true,\n    \"noFallthroughCasesInSwitch\": true,\n    \"noUnusedLocals\": true,\n    \"noUnusedParameters\": true,\n    \"verbatimModuleSyntax\": true,\n    \"isolatedModules\": true,\n    \"resolveJsonModule\": true,\n    \"esModuleInterop\": true,\n    \"forceConsistentCasingInFileNames\": true,\n    \"skipLibCheck\": true,\n    \"useDefineForClassFields\": true,\n    \"paths\": {\n      \"@arrow/editor-core\": [\"./packages/editor-core/src/index\"],\n      \"@arrow/theme\": [\"./packages/theme/src/index\"],\n      \"@arrow/types\": [\"./packages/types/src/index\"],\n      \"@arrow/ui\": [\"./packages/ui/src/index\"]\n    }\n  }\n}\n"
+        }
+      ],
+      "expect": {
+        "run": "node scripts/harness-score.mjs --only entry-point",
+        "exit": "nonzero",
+        "contains": "noImplicitAny"
+      }
+    },
+    {
+      "name": "the entry point criterion fails when the browser smoke spec is gutted",
+      "write": [
+        {
+          "path": "apps/desktop/e2e/smoke.spec.ts",
+          "content": "import { expect, test } from \"@playwright/test\";\n\ntest(\"the app boots\", async () => {\n  expect(1).toBe(1);\n});\n\ntest(\"the app renders\", async () => {\n  expect(2).toBe(2);\n});\n"
+        }
+      ],
+      "expect": {
+        "run": "node scripts/harness-score.mjs --only entry-point",
+        "exit": "nonzero",
+        "contains": "page.goto("
+      }
+    },
+    {
+      "name": "the entry point criterion fails when a rule names an unrelated path",
+      "write": [
+        {
+          "path": "AGENTS.md",
+          "content": "# Arrow\n\nArrow is a standalone, AI-native code editor built from scratch with Tauri v2, React 19 and\nVite. It is a desktop application: the Rust shell owns the disk, the terminal, git and the AI\nclient, and the React tree owns the screen. Agents change this repository daily, so every rule\nbelow names the path that fails when the rule breaks.\n\n## Commands\n\n| Command           | What it does                                        |\n| ----------------- | --------------------------------------------------- |\n| `pnpm dev`        | Run the Tauri shell and the Vite dev server         |\n| `pnpm verify`     | Format check, lint, typecheck, unit tests, build    |\n| `pnpm test:e2e`   | Drive the browser build with Playwright              |\n| `pnpm harness`    | Score the harness criteria                          |\n| `pnpm prove`      | Prove every guardrail catches the mistake it was made for |\n| `cargo build`     | Build the Rust shell in `apps/desktop/src-tauri`     |\n\n## Rules\n\n- The workspace packages never import the Tauri API and never import the desktop app. Enforced by: eslint.arch.mjs\n- The frontend boots in a plain browser with no Tauri host, and Playwright proves it. Enforced by: apps/desktop/e2e/smoke.spec.ts\n- Every color comes from a token in `packages/theme`, and no component hardcodes one. Enforced by: eslint.config.mjs\n- The source tree has no escape hatches: inline lint config, `@ts-ignore`, `@ts-expect-error`, skipped tests and raw `JSON.parse` are errors. Enforced by: eslint.config.mjs\n- TypeScript is strict in every workspace, and the compiler refuses an implicit `any`. Enforced by: tsconfig.base.json\n- API keys never enter the webview, the DOM, the bundle, the logs or a frontend store; they live in Rust and the OS keychain. The lint rule `local/no-secret-in-webview` holds the webview side, and `docs/adr/0005-ai-integration-architecture.md` records the decision. Enforced by: eslint.config.mjs\n- Workspace facts live in Zustand, per-item facts live in Jotai and async workflows live in XState; no store imports another tier. The lint rule `local/no-cross-tier-store` holds the boundary, and `docs/adr/0004-state-management-tiering.md` records the decision. Enforced by: eslint.config.mjs\n- Every rule in this file names an enforcement path that can fail, and this file stays under 100 lines. Enforced by: scripts/harness-score.mjs\n- Every mistake earns a permanent check, a proof case and a log row. Enforced by: scripts/prove-guardrails.mjs\n- A mistake that returns after its guardrail existed is a guardrail failure, and the fix moves to a stronger layer. The procedure is written in `docs/ratchet.md` and the `ratchet` criterion checks it. Enforced by: scripts/harness-score.mjs\n- The pre-commit gate runs format, lint and typecheck on the staged files. Enforced by: lefthook.yml\n- CI runs the same canonical commands and scores the harness. Enforced by: .github/workflows/ci.yml\n- Work happens on a task branch, never on the default branch. Enforced by: scripts/guard-branch.sh\n\n## Where things live\n\n| Path                      | What lives there                                                             |\n| ------------------------- | ---------------------------------------------------------------------------- |\n| `apps/desktop/src`        | The React tree of the desktop shell. It owns the Tauri calls.               |\n| `apps/desktop/src-tauri`  | The Rust shell: the file system, the terminal, git and the AI client.       |\n| `packages/ui`             | The shared UI primitives. It reads theme tokens and never Tauri.            |\n| `packages/editor-core`    | The editor engine. It owns documents and never the desktop shell.           |\n| `packages/theme`          | The dark-first design tokens every layer reads.                             |\n| `packages/types`          | The shared type contracts.                                                  |\n| `scripts`                 | The harness: the scorer, the prover, the branch guard and the theme check.  |\n"
+        }
+      ],
+      "expect": {
+        "run": "node scripts/harness-score.mjs --only entry-point",
+        "exit": "nonzero",
+        "contains": "is enforced by eslint.config.mjs"
+      }
+    },
+    {
+      "name": "the coverage criterion fails when a criterion is deleted and another is duplicated",
+      "write": [
+        {
+          "path": "harness.config.mutation.json",
+          "content": "{\"packageManager\":\"pnpm\",\"minimumCriteria\":10,\"criteria\":[{\"id\":\"ratchet\",\"why\":\"the procedure that turns a mistake into a permanent check is written down\",\"check\":{\"type\":\"markdownSections\",\"path\":\"docs/ratchet.md\",\"sections\":[{\"heading\":\"## 1. Fix at the strongest layer\",\"minLines\":10,\"contains\":[\"lint rule\",\"architecture boundary\",\"Documentation in\"]},{\"heading\":\"## 2. Add a proof case\",\"minLines\":5,\"contains\":[\"proofs\",\"harness.config.json\"]},{\"heading\":\"## 3. Add a log row\",\"minLines\":4,\"contains\":[\"docs/mistake-log.md\"]}]}},{\"id\":\"ratchet\",\"why\":\"the procedure that turns a mistake into a permanent check is written down\",\"check\":{\"type\":\"markdownSections\",\"path\":\"docs/ratchet.md\",\"sections\":[{\"heading\":\"## 1. Fix at the strongest layer\",\"minLines\":10,\"contains\":[\"lint rule\",\"architecture boundary\",\"Documentation in\"]},{\"heading\":\"## 2. Add a proof case\",\"minLines\":5,\"contains\":[\"proofs\",\"harness.config.json\"]},{\"heading\":\"## 3. Add a log row\",\"minLines\":4,\"contains\":[\"docs/mistake-log.md\"]}]}}]}\n"
+        }
+      ],
+      "expect": {
+        "run": "HARNESS_CONFIG=harness.config.mutation.json node scripts/harness-score.mjs --only ratchet",
+        "exit": "nonzero",
+        "contains": "theme-discipline"
+      }
+    },
+    {
+      "name": "the prover fails when a proof case is deleted and another is duplicated",
+      "write": [
+        {
+          "path": "harness.config.mutation.json",
+          "content": "{\"packageManager\":\"pnpm\",\"minimumProofs\":34,\"proofs\":[{\"name\":\"a component hardcodes a color\",\"write\":[],\"expect\":{\"run\":\"true\",\"exit\":\"zero\"}},{\"name\":\"a component hardcodes a color\",\"write\":[],\"expect\":{\"run\":\"true\",\"exit\":\"zero\"}}]}\n"
+        }
+      ],
+      "expect": {
+        "run": "HARNESS_CONFIG=harness.config.mutation.json node scripts/prove-guardrails.mjs",
+        "exit": "nonzero",
+        "contains": "a component hardcodes a named color"
+      }
+    },
+    {
+      "name": "the harness fails when a command criterion runs a no-op",
+      "write": [
+        {
+          "path": "harness.config.mutation.json",
+          "content": "{\"packageManager\":\"pnpm\",\"minimumCriteria\":10,\"criteria\":[{\"id\":\"boundaries\",\"why\":\"the layers that must not reach across a boundary cannot\",\"check\":{\"type\":\"command\",\"run\":\"true\"}}]}\n"
+        }
+      ],
+      "expect": {
+        "run": "HARNESS_CONFIG=harness.config.mutation.json node scripts/harness-score.mjs --only boundaries",
+        "exit": "nonzero",
+        "contains": "proves nothing"
+      }
     }
   ],
   "notes": [
     "The data-access criterion of the default harness was replaced. Arrow has no server-side data layer and no rows to own, so the criterion became the theme discipline: every color comes from a token in packages/theme.",
     "The layer list is the Arrow layer list. The workspace packages under packages/ may not import the Tauri API and may not import the desktop app; the desktop app owns every Tauri call.",
-    "Raise minimumCriteria when a criterion is added. Never lower it to make the score pass.",
-    "minimumProofs is the floor on the proof set, and it lives here so the scorer and the prover cannot disagree about it. Raise it when a proof case is added. Never lower it to make the score pass, and never empty the proof set: a proof run that proves nothing fails.",
+    "Raise minimumCriteria when a criterion is added. Never lower it to make the score pass. The scorer holds the exact set of criterion ids, so a criterion that is deleted, renamed or duplicated fails the score.",
+    "minimumProofs is the floor on the proof set, and it lives here so the scorer and the prover cannot disagree about it. It must equal the number of proof cases the prover holds. Raise it when a proof case is added. Never lower it to make the score pass, and never empty the proof set: a proof run that proves nothing fails. The prover holds the exact set of proof names, so a proof case that is deleted, renamed or duplicated fails the run.",
     "The scorer counts the coverage check separately from the criteria, so a score of 10/10 means ten criteria passed."
   ]
 }
