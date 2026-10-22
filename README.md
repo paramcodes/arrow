@@ -12,41 +12,37 @@ feature on the right.
 
 ![A file open with the ghost text of the AI feature and the badges of the tree](docs/images/ghost-text.png)
 
-A selection in the editor, with the answer of the model arriving as an inline diff. The lines the
-model would remove are struck through, and the lines it would add sit under them.
+The features below have a short clip recorded from the real application, and five stills taken
+from the same display. The AI clips talk to a local stand-in for the provider API: no key, no
+account and no provider is used. The recorder is `scripts/record-demo.mjs`, and
+[docs/demo](docs/demo/README.md) lists every clip and how to rerun it.
 
-![The inline diff of the AI feature over a selected line](docs/images/inline-diff.png)
-
-The settings of the AI feature, with the provider, the model and the key.
-
-![The settings of the AI feature](docs/images/ai-settings.png)
-
-The command palette finds a command of the shell from a few letters.
-
-![The command palette](docs/images/command-palette.png)
-
-A fresh window of Arrow, before a file is open.
-
-![The window of Arrow with no file open](docs/images/arrow-shell.png)
+| Feature | Clip | Still |
+| --- | --- | --- |
+| The inline edit as a diff | [inline-edit.gif](docs/demo/inline-edit.gif) | ![The inline diff](docs/images/inline-diff.png) |
+| The model and the key | [settings-model.gif](docs/demo/settings-model.gif) | ![The settings of the AI feature](docs/images/ai-settings.png) |
+| The command palette | [command-palette.gif](docs/demo/command-palette.gif) | ![The command palette](docs/images/command-palette.png) |
+| A fresh window | [first-run.gif](docs/demo/first-run.gif) | ![The window of Arrow with no file open](docs/images/arrow-shell.png) |
+| Ghost text | [ghost-text.gif](docs/demo/ghost-text.gif) | ![Ghost text after the caret](docs/images/ghost-text.png) |
 
 ## What it does
 
 - A file tree that follows the disk. The Rust watcher sends `fs:changed`, `fs:created` and
-  `fs:deleted`, and the tree updates without a refresh.
-- A CodeMirror 6 editor with tabs, breadcrumbs and a dirty marker. `Ctrl+S` writes the file back.
+  `fs:deleted`, and the tree updates without a refresh. ([clip](docs/demo/tree-follows-disk.gif))
+- A CodeMirror 6 editor with tabs, breadcrumbs and a dirty marker. `Ctrl+S` writes the file back. ([clip](docs/demo/editor-tabs.gif))
 - Ghost text for the AI feature. The suggestion appears after the caret, `Tab` takes it and
-  `Escape` throws it away.
+  `Escape` throws it away. ([clip](docs/demo/ghost-text.gif))
 - An inline edit on the selection. `Cmd+K` (`Ctrl+K` on Linux and Windows) opens a bar over the
   selection, the answer arrives as an inline diff, `Cmd+Enter` takes it and `Escape` leaves the
-  code as it was.
+  code as it was. ([clip](docs/demo/inline-edit.gif))
 - The model in the settings. The provider is `anthropic`, `openai` or `google`, and the list of
-  models follows the provider.
+  models follows the provider. ([clip](docs/demo/settings-model.gif))
 - The first run. With no key in the keychain of the operating system, the status bar shows `AI
-  click to configure`, and clicking it opens the settings.
-- A terminal on a real PTY. Every tab owns one shell, and the output comes back in chunks.
+  click to configure`, and clicking it opens the settings. ([clip](docs/demo/first-run.gif))
+- A terminal on a real PTY. Every tab owns one shell, and the output comes back in chunks. ([clip](docs/demo/terminal.gif))
 - Git in the status bar and in the tree. The branch, the counts of the diff, and a badge on every
-  changed file.
-- A command palette on `Ctrl+Shift+P`, a project search, and a settings dialog whose values persist.
+  changed file. ([clip](docs/demo/git-badges.gif))
+- A command palette on `Ctrl+Shift+P`, a project search, and a settings dialog whose values persist. ([command palette](docs/demo/command-palette.gif), [project search](docs/demo/project-search.gif), [settings dialog](docs/demo/settings-dialog.gif))
 
 ## Download
 
