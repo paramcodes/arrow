@@ -152,13 +152,16 @@ Four boundaries hold the tree together, and each one names the path that fails w
   the ghost text reach the provider through the same client, and one cancel path ends both.
 - The web build answers from a stub. With no Tauri host, the bridge in `apps/desktop/src/lib/ai.ts`
   replays a canned token stream, so Playwright can drive the ghost text in a plain browser.
+- `ARROW_AI_BASE_URL` points the client at a local stand-in for a provider. It is for a stand-in
+  on this machine, and only a loopback host (`127.0.0.1`, `::1`, `localhost`) is honored; any other
+  value is ignored and the request goes to the provider.
 
 ## Documentation
 
 - [The MVP plan](docs/plan/mvp-plan.md) holds the eleven sessions of the plan and the exit gate of
   each.
-- [The architecture decision records](docs/adr/README.md) hold six decisions, each with the options
-  it replaced.
+- [The architecture decision records](docs/adr/README.md) hold seven decisions, each with the
+  options it replaced.
 - [The mistake log](docs/mistake-log.md) holds every mistake the repository has made and the
   guardrail that now catches it.
 - [The ratchet](docs/ratchet.md) holds the procedure that turns a mistake into a permanent check.
