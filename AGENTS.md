@@ -34,6 +34,7 @@ below names the path that fails when the rule breaks.
 - A mistake that returns after its guardrail existed is a guardrail failure, and the fix moves to a stronger layer. The procedure is written in `docs/ratchet.md` and the `ratchet` criterion checks it. Enforced by: scripts/harness-score.mjs
 - The pre-commit gate runs format, lint and typecheck on the staged files. Enforced by: lefthook.yml
 - CI runs the same canonical commands, the end to end suite and scores the harness. Enforced by: .github/workflows/ci.yml
+- The built application opens a real window that paints, and the workflow that runs the check on a schedule keeps its display and its screenshot. Enforced by: .github/workflows/real-window.yml
 - Work happens on a task branch, never on the default branch. Enforced by: scripts/guard-branch.sh
 - Every file that carries the app version names one version, and the check refuses when they disagree. Enforced by: scripts/check-version.mjs
 - The Rust tree is formatted with rustfmt, and `cargo fmt --check` fails when it is not. Enforced by: harness.config.json

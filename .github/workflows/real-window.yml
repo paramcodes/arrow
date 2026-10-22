@@ -1,0 +1,83 @@
+name: Real window
+
+# The real application in a real window, outside the browser stub. This runs on
+# a schedule and after a push to main, never on a pull request, so the merge
+# gate keeps its speed.
+#
+# The script starts its own Xvfb when no display is named, so the runner needs
+# no display. The window is captured to docs/images/real-window.png and the
+# capture is uploaded as an artifact.
+
+on:
+  schedule:
+    - cron: "23 5 * * *"
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: Why this run was started
+        required: false
+        default: manual
+  push:
+    branches: [main]
+
+concurrency:
+  group: real-window-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  real-window:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      # The target directory the Rust cache restores, so a run does not compile
+      # the dependency graph from cold.
+      CARGO_TARGET_DIR: ${{ github.workspace }}/apps/desktop/src-tauri/target
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Xvfb and the Tauri system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            xvfb \
+            imagemagick \
+            libwebkit2gtk-4.1-dev \
+            librsvg2-dev \
+            patchelf \
+            libxdo-dev \
+            libssl-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            build-essential \
+            curl \
+            wget \
+            file
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.9.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: "pnpm install --frozen-lockfile"
+
+      - name: Open the real window and prove it painted
+        run: "scripts/real-window.sh --screenshot docs/images/real-window.png"
+
+      - name: Upload the screenshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: real-window
+          path: docs/images/real-window.png
+          if-no-files-found: warn
