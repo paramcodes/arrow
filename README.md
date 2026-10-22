@@ -1,8 +1,8 @@
 # Arrow
 
-Arrow is a desktop code editor built with Tauri v2, React 19 and Vite, with AI completions that
-run in the Rust shell. It is for developers who want to know where their code runs and where their
-API key lives.
+Arrow is a desktop code editor built with Tauri v2, React 19 and Vite, with AI completions and an
+inline edit that run in the Rust shell. It is for developers who want to know where their code
+runs and where their API key lives.
 
 [![CI](https://github.com/paramcodes/arrow/actions/workflows/ci.yml/badge.svg)](https://github.com/paramcodes/arrow/actions/workflows/ci.yml)
 
@@ -11,6 +11,15 @@ tree carries the `M`, `U` and `D` badges of git, and the status bar shows the st
 feature on the right.
 
 ![A file open with the ghost text of the AI feature and the badges of the tree](docs/images/ghost-text.png)
+
+A selection in the editor, with the answer of the model arriving as an inline diff. The lines the
+model would remove are struck through, and the lines it would add sit under them.
+
+![The inline diff of the AI feature over a selected line](docs/images/inline-diff.png)
+
+The settings of the AI feature, with the provider, the model and the key.
+
+![The settings of the AI feature](docs/images/ai-settings.png)
 
 The command palette finds a command of the shell from a few letters.
 
@@ -27,6 +36,13 @@ A fresh window of Arrow, before a file is open.
 - A CodeMirror 6 editor with tabs, breadcrumbs and a dirty marker. `Ctrl+S` writes the file back.
 - Ghost text for the AI feature. The suggestion appears after the caret, `Tab` takes it and
   `Escape` throws it away.
+- An inline edit on the selection. `Cmd+K` (`Ctrl+K` on Linux and Windows) opens a bar over the
+  selection, the answer arrives as an inline diff, `Cmd+Enter` takes it and `Escape` leaves the
+  code as it was.
+- The model in the settings. The provider is `anthropic`, `openai` or `google`, and the list of
+  models follows the provider.
+- The first run. With no key in the keychain of the operating system, the status bar shows `AI
+  click to configure`, and clicking it opens the settings.
 - A terminal on a real PTY. Every tab owns one shell, and the output comes back in chunks.
 - Git in the status bar and in the tree. The branch, the counts of the diff, and a badge on every
   changed file.
@@ -132,6 +148,8 @@ Four boundaries hold the tree together, and each one names the path that fails w
   `apps/desktop/src-tauri/src/ai/models.rs` holds the models of the three.
 - The Rust client owns the HTTP call and the stream, and normalizes each provider into one event
   shape. The React tree never reads a provider protocol.
+- The shell holds the commands `complete`, `inline_edit` and `cancel_request`. The inline edit and
+  the ghost text reach the provider through the same client, and one cancel path ends both.
 - The web build answers from a stub. With no Tauri host, the bridge in `apps/desktop/src/lib/ai.ts`
   replays a canned token stream, so Playwright can drive the ghost text in a plain browser.
 
