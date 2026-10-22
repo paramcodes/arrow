@@ -141,6 +141,7 @@ const EXPECTED_PROOF_NAMES = [
   "the store test that skips the reset is caught",
   "the tailwind build scans the shared ui package",
   "the theme cascade of the editor settings is caught",
+  "the version check fails when two files disagree",
   "the webview bundle reads a key from the environment",
   "the webview logs a key",
   "the webview stores a key in browser storage",

@@ -35,6 +35,7 @@ below names the path that fails when the rule breaks.
 - The pre-commit gate runs format, lint and typecheck on the staged files. Enforced by: lefthook.yml
 - CI runs the same canonical commands, the end to end suite and scores the harness. Enforced by: .github/workflows/ci.yml
 - Work happens on a task branch, never on the default branch. Enforced by: scripts/guard-branch.sh
+- Every file that carries the app version names one version, and the check refuses when they disagree. Enforced by: scripts/check-version.mjs
 
 ## Where things live
 
