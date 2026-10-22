@@ -1,0 +1,360 @@
+{
+  "date": "2026-10-22T09:38:44.168Z",
+  "startedAt": "2026-10-22T09:38:43.984Z",
+  "machine": {
+    "cpuCores": 4,
+    "cpuModel": "Intel(R) Core(TM) i3-4005U CPU @ 1.70GHz",
+    "memoryBytes": 8212791296,
+    "os": "Omarchy",
+    "kernel": "7.2.8-9-omarchy",
+    "sessionType": "wayland",
+    "desktop": "Hyprland",
+    "freeBytesOnHome": 35429056512,
+    "display": ":99",
+    "displayGeometry": "1280x800x24",
+    "nodeVersion": "v26.8.2"
+  },
+  "method": {
+    "script": "scripts/perf-compare.mjs",
+    "settleSeconds": 25,
+    "startupTimeoutSeconds": 120,
+    "startupMetric": "milliseconds from spawn to the first capture of a viewable window with the editor title that held more than one colour and a standard deviation at or above 0.01, taken with import and read with identify on the same Xvfb display",
+    "memoryMetric": "median of three samples one second apart of the sum of VmRSS over the whole process tree of the launched process, read from /proc/<pid>/status after the settle",
+    "storageMetric": "du --apparent-size --bytes of the unpacked vendor tree the editor runs from",
+    "coldDefinition": "first launch against a profile directory that did not exist before the run, with no instance running",
+    "warmDefinition": "second launch against the same profile directory after a clean exit",
+    "workspace": null,
+    "workspaceReason": "no folder is open in any editor, because the Arrow shell does not read a folder from its command line; every editor therefore runs with an empty window and the same method",
+    "profileRoot": "/home/param/.cache/arrow/perf/profiles",
+    "profileEnv": "XDG_DATA_HOME, XDG_CONFIG_HOME and XDG_CACHE_HOME point into the profile directory of the run, so a cold start begins with no state and the operator's own editor profile is never touched",
+    "pageCache": "not flushed between launches, because that needs root; cold means a fresh profile, not a cold disk",
+    "displayGeometry": "1280x800x24",
+    "notMeasured": [
+      "project indexing on a large tree",
+      "the AI feature of Arrow, because it needs a provider key",
+      "extensions, language servers and any workload beyond one folder open"
+    ]
+  },
+  "editors": [
+    {
+      "id": "arrow",
+      "name": "Arrow",
+      "status": "measured",
+      "version": "0.5.0",
+      "launch": {
+        "executable": "/home/param/.cache/arrow/perf/installs/arrow/AppRun",
+        "arguments": [],
+        "env": {
+          "GDK_BACKEND": "x11",
+          "WEBKIT_DISABLE_COMPOSITING_MODE": "1",
+          "WEBKIT_DISABLE_DMABUF_RENDERER": "1",
+          "LIBGL_ALWAYS_SOFTWARE": "1",
+          "WEBKIT_EXEC_PATH": "/usr/lib/webkit2gtk-4.1"
+        },
+        "windowTitle": "Arrow"
+      },
+      "artifact": {
+        "kind": "appimage",
+        "file": "/home/param/.cache/arrow/perf/editors/Arrow_0.5.0_amd64.AppImage",
+        "bytes": 82840056,
+        "sha256": "817a756d6799e66ce0eb90356cd0dbc0e677f5b2762e7b9995d13c567fc68fc6",
+        "url": "https://github.com/paramcodes/arrow/releases/download/v0.5.0/Arrow_0.5.0_amd64.AppImage",
+        "source": "downloaded from the Arrow v0.5.0 GitHub release (https://github.com/paramcodes/arrow/releases/download/v0.5.0/Arrow_0.5.0_amd64.AppImage), the artifact the release body publishes with its SHA-256"
+      },
+      "storage": {
+        "installDir": "/home/param/.cache/arrow/perf/installs/arrow",
+        "installBytes": 264347930,
+        "metric": "du --apparent-size --bytes of the unpacked vendor tree the editor runs from"
+      },
+      "cold": {
+        "launch": {
+          "label": "cold",
+          "log": "/home/param/.cache/arrow/perf/logs/arrow-cold.log"
+        },
+        "startupMs": 6682,
+        "paintedAt": "2026-10-22T09:38:56.032Z",
+        "window": {
+          "id": 2097156,
+          "title": "Arrow",
+          "width": 1200,
+          "height": 800
+        },
+        "paint": {
+          "colors": 742,
+          "standardDeviation": 0.0281637
+        },
+        "screenshot": "/home/param/.cache/arrow/perf/screenshots/arrow-cold.png",
+        "memory": {
+          "rssBytes": 358412288,
+          "processes": 3,
+          "samples": [
+            {
+              "rssBytes": 358412288,
+              "processes": 3
+            },
+            {
+              "rssBytes": 358412288,
+              "processes": 3
+            },
+            {
+              "rssBytes": 353468416,
+              "processes": 3
+            }
+          ],
+          "metric": "sum of VmRSS of every process in the tree of the launched process, /proc/<pid>/status"
+        }
+      },
+      "warm": {
+        "launch": {
+          "label": "warm",
+          "log": "/home/param/.cache/arrow/perf/logs/arrow-warm.log"
+        },
+        "startupMs": 4491,
+        "paintedAt": "2026-10-22T09:39:27.612Z",
+        "window": {
+          "id": 2097156,
+          "title": "Arrow",
+          "width": 1200,
+          "height": 800
+        },
+        "paint": {
+          "colors": 748,
+          "standardDeviation": 0.0281573
+        },
+        "screenshot": "/home/param/.cache/arrow/perf/screenshots/arrow-warm.png",
+        "memory": {
+          "rssBytes": 354205696,
+          "processes": 3,
+          "samples": [
+            {
+              "rssBytes": 354205696,
+              "processes": 3
+            },
+            {
+              "rssBytes": 354205696,
+              "processes": 3
+            },
+            {
+              "rssBytes": 354205696,
+              "processes": 3
+            }
+          ],
+          "metric": "sum of VmRSS of every process in the tree of the launched process, /proc/<pid>/status"
+        }
+      }
+    },
+    {
+      "id": "vscode",
+      "name": "VS Code",
+      "status": "measured",
+      "version": "1.143.0",
+      "launch": {
+        "executable": "/home/param/.cache/arrow/perf/installs/vscode/code",
+        "arguments": [
+          "--no-sandbox",
+          "--ozone-platform=x11",
+          "--user-data-dir=/home/param/.cache/arrow/perf/profiles/vscode/data",
+          "--extensions-dir=/home/param/.cache/arrow/perf/profiles/vscode/extensions"
+        ],
+        "env": {},
+        "windowTitle": "Visual Studio Code"
+      },
+      "artifact": {
+        "kind": "tarball",
+        "file": "/home/param/.cache/arrow/perf/editors/code-stable-x64-1792533330.tar.gz",
+        "bytes": 350843281,
+        "sha256": "89302bd9631307a49f3b18a570ce588bf7c53aa4169bf4fb36051a6e76f5e205",
+        "url": "https://code.visualstudio.com/sha/download?build=stable&os=linux-x64",
+        "source": "downloaded from https://code.visualstudio.com/sha/download?build=stable&os=linux-x64 and unpacked with tar -xzf --strip-components=1"
+      },
+      "storage": {
+        "installDir": "/home/param/.cache/arrow/perf/installs/vscode",
+        "installBytes": 1031069049,
+        "metric": "du --apparent-size --bytes of the unpacked vendor tree the editor runs from"
+      },
+      "cold": {
+        "launch": {
+          "label": "cold",
+          "log": "/home/param/.cache/arrow/perf/logs/vscode-cold.log"
+        },
+        "startupMs": 12423,
+        "paintedAt": "2026-10-22T09:40:39.243Z",
+        "window": {
+          "id": 2097155,
+          "title": "Visual Studio Code",
+          "width": 1200,
+          "height": 800
+        },
+        "paint": {
+          "colors": 508,
+          "standardDeviation": 0.048234
+        },
+        "screenshot": "/home/param/.cache/arrow/perf/screenshots/vscode-cold.png",
+        "memory": {
+          "rssBytes": 1605550080,
+          "processes": 11,
+          "samples": [
+            {
+              "rssBytes": 1612410880,
+              "processes": 11
+            },
+            {
+              "rssBytes": 1605550080,
+              "processes": 11
+            },
+            {
+              "rssBytes": 1578549248,
+              "processes": 11
+            }
+          ],
+          "metric": "sum of VmRSS of every process in the tree of the launched process, /proc/<pid>/status"
+        }
+      },
+      "warm": {
+        "launch": {
+          "label": "warm",
+          "log": "/home/param/.cache/arrow/perf/logs/vscode-warm.log"
+        },
+        "startupMs": 6970,
+        "paintedAt": "2026-10-22T09:41:23.458Z",
+        "window": {
+          "id": 4194307,
+          "title": "Visual Studio Code",
+          "width": 1200,
+          "height": 800
+        },
+        "paint": {
+          "colors": 31,
+          "standardDeviation": 0.0105723
+        },
+        "screenshot": "/home/param/.cache/arrow/perf/screenshots/vscode-warm.png",
+        "memory": {
+          "rssBytes": 1876103168,
+          "processes": 12,
+          "samples": [
+            {
+              "rssBytes": 1877815296,
+              "processes": 12
+            },
+            {
+              "rssBytes": 1875861504,
+              "processes": 12
+            },
+            {
+              "rssBytes": 1876103168,
+              "processes": 12
+            }
+          ],
+          "metric": "sum of VmRSS of every process in the tree of the launched process, /proc/<pid>/status"
+        }
+      }
+    },
+    {
+      "id": "cursor",
+      "name": "Cursor",
+      "status": "measured",
+      "version": "3.26.16",
+      "launch": {
+        "executable": "/home/param/.cache/arrow/perf/installs/cursor/usr/share/cursor/cursor",
+        "arguments": [
+          "--no-sandbox",
+          "--ozone-platform=x11",
+          "--user-data-dir=/home/param/.cache/arrow/perf/profiles/cursor/data",
+          "--extensions-dir=/home/param/.cache/arrow/perf/profiles/cursor/extensions"
+        ],
+        "env": {},
+        "windowTitle": "Cursor"
+      },
+      "artifact": {
+        "kind": "appimage",
+        "file": "/home/param/.cache/arrow/perf/editors/Cursor-3.26.16-x86_64.AppImage",
+        "bytes": 321907192,
+        "sha256": "d9e68bf4c20519e34bf194f043e4805730c5bfd788226ba230c17f405086c401",
+        "url": "https://www.cursor.com/api/download?platform=linux-x64&releaseTrack=stable",
+        "source": "downloaded from the Cursor download API (https://www.cursor.com/api/download?platform=linux-x64&releaseTrack=stable) and unpacked with --appimage-extract"
+      },
+      "storage": {
+        "installDir": "/home/param/.cache/arrow/perf/installs/cursor",
+        "installBytes": 1085367901,
+        "metric": "du --apparent-size --bytes of the unpacked vendor tree the editor runs from"
+      },
+      "cold": {
+        "launch": {
+          "label": "cold",
+          "log": "/home/param/.cache/arrow/perf/logs/cursor-cold.log"
+        },
+        "startupMs": 15240,
+        "paintedAt": "2026-10-22T09:42:49.486Z",
+        "window": {
+          "id": 2097155,
+          "title": "Cursor Agents",
+          "width": 1279,
+          "height": 799
+        },
+        "paint": {
+          "colors": 138,
+          "standardDeviation": 0.0265513
+        },
+        "screenshot": "/home/param/.cache/arrow/perf/screenshots/cursor-cold.png",
+        "memory": {
+          "rssBytes": 2246995968,
+          "processes": 12,
+          "samples": [
+            {
+              "rssBytes": 2541690880,
+              "processes": 12
+            },
+            {
+              "rssBytes": 2246029312,
+              "processes": 12
+            },
+            {
+              "rssBytes": 2246995968,
+              "processes": 12
+            }
+          ],
+          "metric": "sum of VmRSS of every process in the tree of the launched process, /proc/<pid>/status"
+        }
+      },
+      "warm": {
+        "launch": {
+          "label": "warm",
+          "log": "/home/param/.cache/arrow/perf/logs/cursor-warm.log"
+        },
+        "startupMs": 10812,
+        "paintedAt": "2026-10-22T09:43:37.392Z",
+        "window": {
+          "id": 2097155,
+          "title": "Cursor Agents",
+          "width": 1279,
+          "height": 799
+        },
+        "paint": {
+          "colors": 143,
+          "standardDeviation": 0.0278148
+        },
+        "screenshot": "/home/param/.cache/arrow/perf/screenshots/cursor-warm.png",
+        "memory": {
+          "rssBytes": 2448637952,
+          "processes": 12,
+          "samples": [
+            {
+              "rssBytes": 2489516032,
+              "processes": 12
+            },
+            {
+              "rssBytes": 2448547840,
+              "processes": 12
+            },
+            {
+              "rssBytes": 2448637952,
+              "processes": 12
+            }
+          ],
+          "metric": "sum of VmRSS of every process in the tree of the launched process, /proc/<pid>/status"
+        }
+      }
+    }
+  ],
+  "durationSeconds": 325
+}
