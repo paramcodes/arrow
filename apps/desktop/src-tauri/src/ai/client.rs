@@ -389,6 +389,72 @@ mod tests {
         );
     }
 
+    #[tokio::test]
+    async fn an_override_sends_the_request_to_a_server_on_this_machine() {
+        let listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("the server binds a port");
+        let address = listener.local_addr().expect("the server has an address");
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.expect("the server accepts");
+            let mut head = String::new();
+            let mut buffer = [0_u8; 4096];
+            while !head.contains("\r\n\r\n") {
+                let read = socket.read(&mut buffer).await.expect("the server reads");
+                if read == 0 {
+                    break;
+                }
+                head.push_str(&String::from_utf8_lossy(&buffer[..read]));
+            }
+
+            let body = "data: {\"choices\":[{\"delta\":{\"content\":\"Hi\"}}]}\n\ndata: [DONE]\n\n";
+            let response = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nContent-Length: {}\r\n\r\n{body}",
+                body.len()
+            );
+            socket
+                .write_all(response.as_bytes())
+                .await
+                .expect("the server answers");
+            socket.flush().await.ok();
+            head
+        });
+
+        let base = format!("http://{address}");
+        let events = Arc::new(Mutex::new(Vec::new()));
+        let sink = Arc::clone(&events);
+        stream_to(
+            &request(),
+            KEY,
+            move |event| {
+                sink.lock().expect("the lock is free").push(event);
+            },
+            &Endpoints::from_override(Some(&base)),
+        )
+        .await
+        .expect("the request reaches the server on this machine");
+
+        let head = server.await.expect("the server task ends");
+        assert!(
+            head.starts_with("POST /v1/chat/completions HTTP/1.1\r\n"),
+            "the request goes to the path of the provider: {head}"
+        );
+        assert!(
+            head.to_ascii_lowercase()
+                .contains(&format!("authorization: bearer {KEY}")),
+            "the key goes to the server on this machine: {head}"
+        );
+        assert_eq!(
+            events_of(&events),
+            vec![
+                AiEvent::Token {
+                    text: "Hi".to_string()
+                },
+                AiEvent::Complete,
+            ]
+        );
+    }
+
     /// The three providers, in the order the tests check them.
     const PROVIDERS: [Provider; 3] = [Provider::Anthropic, Provider::OpenAi, Provider::Google];
 

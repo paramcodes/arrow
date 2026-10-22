@@ -65,9 +65,10 @@ The rule holds in one function, `loopback_base`, and it reads the host from the 
 
 ## Confirmation
 
-The four tests in `apps/desktop/src-tauri/src/ai/client.rs` are the proof, and `cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml` runs them:
+The five tests in `apps/desktop/src-tauri/src/ai/client.rs` are the proof, and `cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml` runs them:
 
 - `the_override_points_every_provider_at_the_local_server` asserts the url of a request of each provider carries the loopback base, and that the key header of the request is the key.
+- `an_override_sends_the_request_to_a_server_on_this_machine` streams a request through the override into a server on `127.0.0.1`, and asserts the request line names the path of the provider and the authorization header carries the key.
 - `an_override_that_is_not_a_loopback_host_is_ignored` feeds ten values, among them a public host, a private address, a name that ends in `127.0.0.1`, a name that ends in `localhost`, a url whose user info holds `127.0.0.1`, an empty value and a `file:` url, and asserts the literal provider url of a request of each provider.
 - `the_environment_variable_is_the_override` sets `ARROW_AI_BASE_URL`, reads `Endpoints::from_env`, and asserts a loopback value takes effect while a public value does not.
 - `only_the_three_named_loopback_hosts_are_honored` asserts the accepted forms, among them `[::1]` and uppercase `LOCALHOST`, and the rejected near misses `127.0.0.2`, `[::2]`, `localhost.` and `0.0.0.0`.
