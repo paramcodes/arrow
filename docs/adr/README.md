@@ -12,6 +12,7 @@ This directory holds the architecture decisions for Arrow. Each record states on
 | [ADR-0004](0004-state-management-tiering.md) | Assign Zustand, Jotai, and XState to separate state layers | Accepted | 2026-10-21 |
 | [ADR-0005](0005-ai-integration-architecture.md) | Put the AI client in the Rust backend and stream tokens over SSE | Accepted | 2026-10-21 |
 | [ADR-0006](0006-agent-ready-harness-and-testing.md) | Install the agent-ready harness with Vitest and Playwright from day one | Accepted | 2026-10-21 |
+| [ADR-0007](0007-publish-linux-bundles-from-a-tag.md) | Publish the Linux bundles from a tag in a workflow of its own | Accepted | 2026-10-22 |
 
 ## Format
 
