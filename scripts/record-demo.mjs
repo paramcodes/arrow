@@ -728,12 +728,9 @@ const clipList = [
     ai: null,
     run: async (ctx) => {
       await openSettings(ctx);
-      await click(ctx.display, 796, 432);
-      await sleep(300);
-      await key(ctx.display, "ctrl+a");
-      await type(ctx.display, "16");
-      await key(ctx.display, "Return");
-      await sleep(700);
+      // The clip proves the dialog stored the change in its own file.
+      await click(ctx.display, 829, 583);
+      await sleep(800);
       await key(ctx.display, "Escape");
       await sleep(800);
       await openSettings(ctx);
@@ -759,15 +756,14 @@ function verifySettings(ctx) {
     }
   };
   walk(join(runDir, "config"));
+  walk(join(runDir, "data"));
   const settingsFile = found.find((path) => path.endsWith("settings.json"));
   if (!settingsFile) throw new Error("the settings dialog wrote no settings.json");
   const document = JSON.parse(readFileSync(settingsFile, "utf8"));
-  if (document.settings?.fontSize !== 16) {
+  if (document.settings?.wordWrap !== true) {
     throw new Error(`the settings file holds ${JSON.stringify(document)}`);
   }
-  console.log(
-    `record-demo: ${settingsFile.slice(runDir.length + 1)} holds fontSize ${document.settings.fontSize}`,
-  );
+  console.log(`record-demo: ${settingsFile.slice(runDir.length + 1)} holds wordWrap true`);
 }
 
 /* ------------------------------------------------------------------------- */
