@@ -7,8 +7,15 @@
 //!
 //! The client does not store the key and does not read it from the disk. The
 //! other half of the session owns the keychain and hands the key over.
+//!
+//! A developer can point the client at a local stand-in for a provider with
+//! `ARROW_AI_BASE_URL`. The override is honored only when the host of the
+//! value is a loopback host, so a stray variable cannot send the key to
+//! another machine.
 
 use std::time::Duration;
+
+use reqwest::Url;
 
 use crate::ai::models::{redact, AiError, AiEvent, AiRequest, Provider};
 use crate::ai::providers;
@@ -16,6 +23,16 @@ use crate::ai::stream::SseReader;
 
 /// The time the client waits for the connection of a request.
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// The environment variable that points the client at a local stand-in for a
+/// provider.
+pub const BASE_URL_VAR: &str = "ARROW_AI_BASE_URL";
+
+/// The hosts the override is honored for.
+///
+/// The list is exact on purpose. A host outside it is a machine that is not
+/// this one, and the key never leaves the machine for the sake of a variable.
+const LOOPBACK_HOSTS: [&str; 3] = ["127.0.0.1", "::1", "localhost"];
 
 /// The addresses the client talks to.
 ///
@@ -43,6 +60,28 @@ impl Default for Endpoints {
 }
 
 impl Endpoints {
+    /// The addresses of the providers, with the local stand-in in place of
+    /// every one of them when `ARROW_AI_BASE_URL` names a loopback host.
+    pub fn from_env() -> Self {
+        Self::from_override(std::env::var(BASE_URL_VAR).ok().as_deref())
+    }
+
+    /// The addresses of the providers, with the given override in place of
+    /// every one of them when it names a loopback host.
+    ///
+    /// An override that names any other host is ignored, and the addresses
+    /// stay the addresses of the providers.
+    fn from_override(value: Option<&str>) -> Self {
+        match value.and_then(loopback_base) {
+            Some(base) => Self {
+                anthropic: base.clone(),
+                openai: base.clone(),
+                google: base,
+            },
+            None => Self::default(),
+        }
+    }
+
     /// The address of the provider of the request.
     pub fn base_for(&self, provider: Provider) -> &str {
         match provider {
@@ -51,6 +90,24 @@ impl Endpoints {
             Provider::Google => &self.google,
         }
     }
+}
+
+/// The address an override names, when its host is a loopback host.
+///
+/// The host is read from the parsed url, so the parts of the value that a
+/// reader could mistake for a host, such as the user info or a label of a
+/// longer name, never count as one.
+fn loopback_base(value: &str) -> Option<String> {
+    let url = Url::parse(value).ok()?;
+    let host = url.host_str()?;
+    let host = host
+        .strip_prefix('[')
+        .and_then(|host| host.strip_suffix(']'))
+        .unwrap_or(host);
+    let loopback = LOOPBACK_HOSTS
+        .iter()
+        .any(|allowed| host.eq_ignore_ascii_case(allowed));
+    loopback.then(|| value.to_string())
 }
 
 /// Stream the answer of one request into the sink.
@@ -64,7 +121,7 @@ pub async fn stream(
     key: &str,
     sink: impl Fn(AiEvent) + Send,
 ) -> Result<(), AiError> {
-    stream_to(req, key, sink, &Endpoints::default()).await
+    stream_to(req, key, sink, &Endpoints::from_env()).await
 }
 
 /// Stream the answer of one request into the sink, against the given addresses.
@@ -141,6 +198,20 @@ mod tests {
             prompt: "refactor this".to_string(),
             context: vec![ContextItem::new(ContextRole::System, "you are Arrow")],
             max_output_tokens: 128,
+        }
+    }
+
+    /// The request of a provider, with the model that provider serves.
+    fn request_for(provider: Provider) -> AiRequest {
+        let model = match provider {
+            Provider::Anthropic => "claude-sonnet-4-5",
+            Provider::OpenAi => "gpt-4o",
+            Provider::Google => "gemini-2.0-flash",
+        };
+        AiRequest {
+            provider,
+            model: model.to_string(),
+            ..request()
         }
     }
 
@@ -316,5 +387,144 @@ mod tests {
             !formatted.contains(KEY),
             "the key is not in the error: {formatted}"
         );
+    }
+
+    /// The three providers, in the order the tests check them.
+    const PROVIDERS: [Provider; 3] = [Provider::Anthropic, Provider::OpenAi, Provider::Google];
+
+    /// The url a request of the provider carries when no override is in force.
+    fn provider_request_url(provider: Provider) -> &'static str {
+        match provider {
+            Provider::Anthropic => "https://api.anthropic.com/v1/messages",
+            Provider::OpenAi => "https://api.openai.com/v1/chat/completions",
+            Provider::Google => {
+                "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:streamGenerateContent?alt=sse"
+            }
+        }
+    }
+
+    #[test]
+    fn the_override_points_every_provider_at_the_local_server() {
+        let base = "http://127.0.0.1:8787";
+        let endpoints = Endpoints::from_override(Some(base));
+
+        for provider in PROVIDERS {
+            assert_eq!(endpoints.base_for(provider), base);
+        }
+
+        let anthropic = providers::build_request_at(
+            &request_for(Provider::Anthropic),
+            KEY,
+            endpoints.base_for(Provider::Anthropic),
+        );
+        assert_eq!(anthropic.url, "http://127.0.0.1:8787/v1/messages");
+        assert_eq!(anthropic.header("x-api-key"), Some(KEY));
+
+        let openai = providers::build_request_at(
+            &request_for(Provider::OpenAi),
+            KEY,
+            endpoints.base_for(Provider::OpenAi),
+        );
+        assert_eq!(openai.url, "http://127.0.0.1:8787/v1/chat/completions");
+        assert_eq!(
+            openai.header("authorization").map(str::to_string),
+            Some(format!("Bearer {KEY}"))
+        );
+
+        let google = providers::build_request_at(
+            &request_for(Provider::Google),
+            KEY,
+            endpoints.base_for(Provider::Google),
+        );
+        assert_eq!(
+            google.url,
+            "http://127.0.0.1:8787/v1beta/models/gemini-2.0-flash:streamGenerateContent?alt=sse"
+        );
+        assert_eq!(google.header("x-goog-api-key"), Some(KEY));
+    }
+
+    #[test]
+    fn an_override_that_is_not_a_loopback_host_is_ignored() {
+        let elsewhere = [
+            "https://api.anthropic.com",
+            "https://evil.example",
+            "http://10.0.0.5:8080",
+            "http://169.254.169.254",
+            "http://127.0.0.1.evil.example",
+            "http://localhost.evil.example",
+            "http://127.0.0.1@evil.example",
+            "",
+            "not a url",
+            "file:///etc/passwd",
+        ];
+
+        for value in elsewhere {
+            let endpoints = Endpoints::from_override(Some(value));
+            assert_eq!(
+                endpoints,
+                Endpoints::default(),
+                "the override {value:?} is ignored"
+            );
+
+            for provider in PROVIDERS {
+                let parts = providers::build_request_at(
+                    &request_for(provider),
+                    KEY,
+                    endpoints.base_for(provider),
+                );
+                assert_eq!(
+                    parts.url,
+                    provider_request_url(provider),
+                    "the request of {provider:?} stays at the provider after {value:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn the_environment_variable_is_the_override() {
+        // This is the only test that touches the variable, and it holds it for
+        // as short a time as it can.
+        std::env::set_var(BASE_URL_VAR, "http://127.0.0.1:8787");
+        let loopback = Endpoints::from_env();
+        std::env::set_var(BASE_URL_VAR, "https://evil.example");
+        let elsewhere = Endpoints::from_env();
+        std::env::remove_var(BASE_URL_VAR);
+
+        assert_eq!(loopback.base_for(Provider::OpenAi), "http://127.0.0.1:8787");
+        assert_eq!(elsewhere, Endpoints::default());
+        assert_eq!(BASE_URL_VAR, "ARROW_AI_BASE_URL");
+    }
+
+    #[test]
+    fn only_the_three_named_loopback_hosts_are_honored() {
+        let honored = [
+            "http://127.0.0.1:8787",
+            "http://[::1]:8787",
+            "http://localhost:8787",
+            "http://LOCALHOST:8787",
+            "http://[0:0:0:0:0:0:0:1]:8787",
+        ];
+        for value in honored {
+            assert_eq!(
+                Endpoints::from_override(Some(value)).base_for(Provider::OpenAi),
+                value,
+                "the override {value:?} is honored"
+            );
+        }
+
+        let not_honored = [
+            "http://127.0.0.2:8787",
+            "http://[::2]:8787",
+            "http://localhost.:8787",
+            "http://0.0.0.0:8787",
+        ];
+        for value in not_honored {
+            assert_eq!(
+                Endpoints::from_override(Some(value)),
+                Endpoints::default(),
+                "the override {value:?} is not one of the three hosts"
+            );
+        }
     }
 }
