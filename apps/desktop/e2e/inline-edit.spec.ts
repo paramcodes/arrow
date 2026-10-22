@@ -131,6 +131,11 @@ test("Cmd+Enter applies the diff", async ({ page }) => {
   await page.keyboard.press("Control+Enter");
 
   await expect.poll(() => documentText(page), { timeout: 15_000 }).toContain(MARKER);
+  const text = await documentText(page);
+  expect(
+    text,
+    "the apply lands the change on its range and leaves the rest of the document as it was",
+  ).toContain(FUNCTION_LINE);
   await expect(page.locator(".cm-inline-diff-removed")).toHaveCount(0);
   await expect(page.getByTestId("inline-edit-bar")).toHaveCount(0);
 });
@@ -198,6 +203,14 @@ test("the key of the provider reaches the store of the window", async ({ page })
 
   await expect(page.getByTestId("ai-key-status")).toContainText("A key is in the keychain");
   await expect(page.getByTestId("status-ai")).toHaveAttribute("data-state", "ready");
+
+  // A reader who changes the provider sees the key of that provider, not the
+  // one the panel had when it opened: the panel asks the shell for the key
+  // of the provider it now shows.
+  await page.getByTestId("ai-provider-openai").click();
+  await expect(page.getByTestId("ai-key-status")).toContainText("No key for this provider yet.");
+  await page.getByTestId("ai-provider-anthropic").click();
+  await expect(page.getByTestId("ai-key-status")).toContainText("A key is in the keychain");
 
   const asked = await page.evaluate(() => window.__arrowAi?.calls ?? []);
   const stored = asked.filter((call) => call.command === "set_api_key");

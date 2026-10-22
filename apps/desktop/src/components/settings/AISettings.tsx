@@ -1,4 +1,4 @@
-import { useState, type JSX } from "react";
+import { useEffect, useState, type JSX } from "react";
 
 import { Button } from "@arrow/ui";
 
@@ -33,6 +33,22 @@ export function AISettings(): JSX.Element {
   const setHasKey = useAiStore((state) => state.setHasKey);
   const setCompletionsEnabled = useAiStore((state) => state.setCompletionsEnabled);
   const [key, setKey] = useState("");
+
+  // A change of the provider changes the answer of the keychain, so the
+  // panel asks the shell for the key of the provider it now shows, the way
+  // the status bar does. The answer is a boolean and never the key itself.
+  useEffect(() => {
+    let cancelled = false;
+
+    void hasApiKey(provider).then((exists) => {
+      if (cancelled) return;
+      setHasKey(exists);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [provider, setHasKey]);
 
   async function saveKey(): Promise<void> {
     if (key.length === 0) return;

@@ -48,6 +48,18 @@ describe("the settings of the AI", () => {
     expect(aiSettingsSource).not.toContain("localStorage");
   });
 
+  it("asks the shell for the key again when the provider changes", () => {
+    const code = codeOf(aiSettingsSource);
+
+    expect(code, "the refresh sits behind the provider it follows").toMatch(
+      /\[\s*provider,\s*setHasKey\s*\]/,
+    );
+    expect(code, "the panel asks with the provider the reader chose").toContain(
+      "hasApiKey(provider)",
+    );
+    expect(code, "the answer of the shell lands in the store").toContain("setHasKey(exists)");
+  });
+
   it("offers the models of the provider", () => {
     expect(codeOf(modelSelectorSource)).toContain("PROVIDER_MODELS[provider]");
   });

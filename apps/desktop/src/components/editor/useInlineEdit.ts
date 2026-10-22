@@ -243,33 +243,7 @@ export function useInlineEdit({
   /** The reader sent the instruction, so the request goes out. */
   const submit = useCallback(
     (instruction: string) => {
-      const view = viewRef.current;
-      if (!view) return;
-
-      const context = actor.getSnapshot().context;
-      if (context.original === "") return;
-
-      started += 1;
-      const requestId = `inline-edit-${started}`;
-
-      // A new request replaces the one that was in flight, so the tokens of
-      // the old one never reach the document.
-      endRequest();
-      actor.send({ type: "SUBMIT", instruction, requestId });
-      runtime.current.requestId = requestId;
-      runtime.current.from = context.from;
-      runtime.current.to = context.to;
-      runtime.current.original = context.original;
-
-      void requestEdit({
-        requestId,
-        instruction,
-        provider: facts.current.provider,
-        model: facts.current.model,
-        runtime,
-        viewRef,
-        actor,
-      });
+      submitInstruction({ actor, viewRef, runtime, facts, instruction, endRequest });
     },
     [actor, endRequest, viewRef],
   );
@@ -331,6 +305,60 @@ export function useInlineEdit({
       if (view) rejectIn(view);
     },
   };
+}
+
+/**
+ * The reader sent the instruction, so the request goes out.
+ *
+ * The machine is the only source of truth about the state of the workflow, so
+ * a submit that arrives while it is not asking for an instruction sends
+ * nothing: the request leaves only from the state `prompting`, and no other
+ * state of the machine opens one.
+ */
+export function submitInstruction({
+  actor,
+  viewRef,
+  runtime,
+  facts,
+  instruction,
+  endRequest,
+}: {
+  readonly actor: InlineEditActor;
+  readonly viewRef: RefObject<EditorView | null>;
+  readonly runtime: { current: InlineEditRuntime };
+  readonly facts: { current: { active: boolean; provider: AiProvider; model: string } };
+  readonly instruction: string;
+  readonly endRequest: () => void;
+}): void {
+  if (actor.getSnapshot().value !== "prompting") return;
+
+  const view = viewRef.current;
+  if (!view) return;
+
+  const context = actor.getSnapshot().context;
+  if (context.original === "") return;
+
+  started += 1;
+  const requestId = `inline-edit-${started}`;
+
+  // A new request replaces the one that was in flight, so the tokens of
+  // the old one never reach the document.
+  endRequest();
+  actor.send({ type: "SUBMIT", instruction, requestId });
+  runtime.current.requestId = requestId;
+  runtime.current.from = context.from;
+  runtime.current.to = context.to;
+  runtime.current.original = context.original;
+
+  void requestEdit({
+    requestId,
+    instruction,
+    provider: facts.current.provider,
+    model: facts.current.model,
+    runtime,
+    viewRef,
+    actor,
+  });
 }
 
 /**
