@@ -128,6 +128,9 @@ jobs:
       - name: Publish the release for the tag
         env:
           GH_TOKEN: ${{ github.token }}
+          # The release job has no checkout, so gh learns the repository from
+          # the environment instead of a git remote.
+          GH_REPO: ${{ github.repository }}
         run: |
           gh release create "${GITHUB_REF_NAME}" \
             release/*.AppImage release/*.deb release/*.rpm release/SHA256SUMS.txt \
