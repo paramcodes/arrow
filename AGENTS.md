@@ -35,6 +35,7 @@ below names the path that fails when the rule breaks.
 - The pre-commit gate runs format, lint and typecheck on the staged files. Enforced by: lefthook.yml
 - CI runs the same canonical commands, the end to end suite and scores the harness. Enforced by: .github/workflows/ci.yml
 - Work happens on a task branch, never on the default branch. Enforced by: scripts/guard-branch.sh
+- The Rust tree is formatted with rustfmt, and `cargo fmt --check` fails when it is not. Enforced by: harness.config.json
 
 ## Where things live
 

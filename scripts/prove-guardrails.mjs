@@ -131,6 +131,7 @@ const EXPECTED_PROOF_NAMES = [
   "the prover fails when a proof case is deleted and another is duplicated",
   "the prover refuses a second run while the lock is held",
   "the ratchet criterion fails when the procedure is deleted",
+  "the rust tree that is not formatted is caught",
   "the scorer refuses a second run while the tree lock is held",
   "the second toolchain criterion fails when the rust gate only prints",
   "the shell content padding that leaves eight pixels is caught",
