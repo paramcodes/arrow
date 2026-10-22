@@ -61,3 +61,5 @@ Session 9's exit gate in the MVP plan is the actual proof: Rust streams tokens f
 ## More Information
 
 The AI integration table and the terminal/streaming notes are in [docs/plan/discovery.md](../plan/discovery.md), section 3. The client work is Session 9, and its consumers are Sessions 10 and 11, in [docs/plan/mvp-plan.md](../plan/mvp-plan.md).
+
+The schema of the bridge is one contract: event names, payload fields, command names and argument fields live in `packages/types/src/ai-contract.json`. The Rust shell holds its emitted event names, its serialized payload fields and its parsed argument fields to that file in the tests of `apps/desktop/src-tauri/src/commands/ai.rs`, and the frontend takes its payload types, its event name prefixes and its command names from the same file in `apps/desktop/src/lib/ai.ts`. Neither side spells a name of the boundary anywhere else, so a name that drifts on either side fails a unit test in seconds, with no display, no network and no key.

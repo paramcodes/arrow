@@ -145,6 +145,7 @@ const EXPECTED_PROOF_NAMES = [
   "a workspace package reaches the desktop app with require",
   "one file imports two state tiers",
   "the AI bridge never hands the key back",
+  "the AI boundary that drifts from the contract is caught",
   "the AI store holds no key material",
   "the active line case fails when the active line is not painted",
   "the artifact criterion fails when the build output misses the source",

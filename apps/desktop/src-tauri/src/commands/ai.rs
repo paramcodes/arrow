@@ -373,6 +373,49 @@ impl<'de, R: Runtime> CommandArg<'de, R> for RequestId {
 /// every name in it.
 pub struct CompletionPayload(pub CompletionArgs);
 
+/// The arguments of a completion, read from the payload of the webview by
+/// hand, so the command answers to either spelling of every name in it.
+fn completion_args_of(payload: &serde_json::Value) -> Result<CompletionArgs, InvokeError> {
+    let request_id = read(payload, &["requestId", "request_id"])
+        .ok_or_else(|| InvokeError::from("complete needs the id of the request"))?;
+    let provider = read(payload, &["provider"])
+        .ok_or_else(|| InvokeError::from("complete needs the provider of the request"))?;
+    let model = read(payload, &["model"])
+        .ok_or_else(|| InvokeError::from("complete needs the model of the request"))?;
+    let prompt = read(payload, &["prompt"])
+        .ok_or_else(|| InvokeError::from("complete needs the prompt of the request"))?;
+    let context = read(payload, &["context"]).unwrap_or_default();
+
+    Ok(CompletionArgs {
+        request_id,
+        provider,
+        model,
+        prompt,
+        context,
+    })
+}
+
+/// The arguments of an inline edit, read from the payload of the webview.
+fn inline_edit_args_of(payload: &serde_json::Value) -> Result<InlineEditArgs, InvokeError> {
+    let request_id = read(payload, &["requestId", "request_id"])
+        .ok_or_else(|| InvokeError::from("inline_edit needs the id of the request"))?;
+    let provider = read(payload, &["provider"])
+        .ok_or_else(|| InvokeError::from("inline_edit needs the provider of the request"))?;
+    let model = read(payload, &["model"])
+        .ok_or_else(|| InvokeError::from("inline_edit needs the model of the request"))?;
+    let instruction = read(payload, &["instruction"])
+        .ok_or_else(|| InvokeError::from("inline_edit needs the instruction of the edit"))?;
+    let selection = read(payload, &["selection"]).unwrap_or_default();
+
+    Ok(InlineEditArgs {
+        request_id,
+        provider,
+        model,
+        instruction,
+        selection,
+    })
+}
+
 impl<'de, R: Runtime> CommandArg<'de, R> for CompletionPayload {
     fn from_command(command: CommandItem<'de, R>) -> Result<Self, InvokeError> {
         let InvokeBody::Json(payload) = command.message.payload() else {
@@ -381,23 +424,7 @@ impl<'de, R: Runtime> CommandArg<'de, R> for CompletionPayload {
             ));
         };
 
-        let request_id = read(&payload, &["requestId", "request_id"])
-            .ok_or_else(|| InvokeError::from("complete needs the id of the request"))?;
-        let provider = read(&payload, &["provider"])
-            .ok_or_else(|| InvokeError::from("complete needs the provider of the request"))?;
-        let model = read(&payload, &["model"])
-            .ok_or_else(|| InvokeError::from("complete needs the model of the request"))?;
-        let prompt = read(&payload, &["prompt"])
-            .ok_or_else(|| InvokeError::from("complete needs the prompt of the request"))?;
-        let context = read(&payload, &["context"]).unwrap_or_default();
-
-        Ok(CompletionPayload(CompletionArgs {
-            request_id,
-            provider,
-            model,
-            prompt,
-            context,
-        }))
+        Ok(CompletionPayload(completion_args_of(&payload)?))
     }
 }
 
@@ -412,23 +439,7 @@ impl<'de, R: Runtime> CommandArg<'de, R> for InlineEditPayload {
             ));
         };
 
-        let request_id = read(&payload, &["requestId", "request_id"])
-            .ok_or_else(|| InvokeError::from("inline_edit needs the id of the request"))?;
-        let provider = read(&payload, &["provider"])
-            .ok_or_else(|| InvokeError::from("inline_edit needs the provider of the request"))?;
-        let model = read(&payload, &["model"])
-            .ok_or_else(|| InvokeError::from("inline_edit needs the model of the request"))?;
-        let instruction = read(&payload, &["instruction"])
-            .ok_or_else(|| InvokeError::from("inline_edit needs the instruction of the edit"))?;
-        let selection = read(&payload, &["selection"]).unwrap_or_default();
-
-        Ok(InlineEditPayload(InlineEditArgs {
-            request_id,
-            provider,
-            model,
-            instruction,
-            selection,
-        }))
+        Ok(InlineEditPayload(inline_edit_args_of(&payload)?))
     }
 }
 
@@ -745,16 +756,171 @@ mod tests {
         }
     }
 
-    #[test]
-    fn the_three_commands_are_the_contract() {
-        assert_eq!(COMMANDS, ["complete", "inline_edit", "cancel_request"]);
+    /**
+     * The one contract of the AI boundary, in `packages/types`.
+     *
+     * The frontend reads this file, and the cases below hold the shell to
+     * everything it names, so a name that drifts on either side fails here
+     * in seconds, with no display, no network and no key.
+     */
+    const CONTRACT: &str = include_str!("../../../../../packages/types/src/ai-contract.json");
+
+    fn the_contract() -> serde_json::Value {
+        serde_json::from_str(CONTRACT).expect("the contract is valid JSON")
+    }
+
+    /// The payload the contract describes, with one value per field name.
+    fn args_payload(spec: &serde_json::Value) -> serde_json::Value {
+        serde_json::Value::Object(
+            spec["args"]
+                .as_object()
+                .expect("the contract holds the arguments of the command")
+                .iter()
+                .map(|(name, _value)| (name.to_string(), serde_json::Value::String("x".into())))
+                .collect(),
+        )
     }
 
     #[test]
-    fn the_event_names_carry_the_request() {
-        assert_eq!(token_event("abc"), "ai:token:abc");
-        assert_eq!(complete_event("abc"), "ai:complete:abc");
-        assert_eq!(error_event("abc"), "ai:error:abc");
+    fn the_event_names_are_the_contract() {
+        let contract = the_contract();
+
+        let prefix = |id: &str| {
+            contract["events"][id]["prefix"]
+                .as_str()
+                .unwrap_or_else(|| panic!("the contract holds no prefix for {id}"))
+        };
+
+        assert_eq!(token_event("abc"), format!("{}abc", prefix("token")));
+        assert_eq!(complete_event("abc"), format!("{}abc", prefix("complete")));
+        assert_eq!(error_event("abc"), format!("{}abc", prefix("error")));
+    }
+
+    #[test]
+    fn the_payload_fields_are_the_contract() {
+        let contract = the_contract();
+
+        let payloads: [(&str, serde_json::Value); 3] = [
+            (
+                "token",
+                serde_json::to_value(TokenPayload {
+                    token: "one".to_string(),
+                    done: false,
+                })
+                .expect("the token payload serializes"),
+            ),
+            (
+                "complete",
+                serde_json::to_value(CompletePayload { done: true }).expect("serializes"),
+            ),
+            (
+                "error",
+                serde_json::to_value(ErrorPayload {
+                    error: "why".to_string(),
+                })
+                .expect("serializes"),
+            ),
+        ];
+
+        for (event, payload) in payloads {
+            let spec = &contract["events"][event]["payload"]
+                .as_object()
+                .unwrap_or_else(|| panic!("the contract holds no payload for {event}"));
+
+            for name in spec.keys() {
+                assert!(
+                    payload
+                        .as_object()
+                        .expect("the payload is an object")
+                        .contains_key(name),
+                    "the payload of {event} does not carry {name}, which the contract holds"
+                );
+            }
+
+            for name in payload
+                .as_object()
+                .expect("the payload is an object")
+                .keys()
+            {
+                assert!(
+                    spec.contains_key(name),
+                    "the contract of {event} does not hold {name}, which the shell sends"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn the_commands_are_the_contract() {
+        let contract = the_contract();
+
+        let mut names: Vec<&str> = contract["commands"]
+            .as_object()
+            .expect("the contract holds the commands")
+            .keys()
+            .map(|name| name.as_str())
+            .collect();
+        let mut held: Vec<&str> = COMMANDS.to_vec();
+        held.extend_from_slice(&crate::key_commands::COMMANDS);
+
+        names.sort_unstable();
+        held.sort_unstable();
+
+        assert_eq!(
+            names, held,
+            "the shell and the contract hold the six commands"
+        );
+    }
+
+    #[test]
+    fn the_arguments_of_the_requests_come_from_the_contract() {
+        let contract = the_contract();
+
+        let completion = completion_args_of(&args_payload(&contract["commands"]["complete"]))
+            .expect("the contract of complete is what the command reads");
+        assert_eq!(completion.request_id, "x", "requestId");
+        assert_eq!(completion.provider, "x", "provider");
+        assert_eq!(completion.model, "x", "model");
+        assert_eq!(completion.prompt, "x", "prompt");
+        assert_eq!(completion.context, "x", "context");
+
+        let inline_edit = inline_edit_args_of(&args_payload(&contract["commands"]["inline_edit"]))
+            .expect("the contract of inline_edit is what the command reads");
+        assert_eq!(inline_edit.request_id, "x", "requestId");
+        assert_eq!(inline_edit.provider, "x", "provider");
+        assert_eq!(inline_edit.model, "x", "model");
+        assert_eq!(inline_edit.instruction, "x", "instruction");
+        assert_eq!(inline_edit.selection, "x", "selection");
+
+        let request_id = RequestId::of(&args_payload(&contract["commands"]["cancel_request"]))
+            .expect("the contract of cancel_request is what the command reads");
+        assert_eq!(request_id, "x", "requestId");
+    }
+
+    #[test]
+    fn the_arguments_of_the_key_commands_come_from_the_contract() {
+        let contract = the_contract();
+        let source = include_str!("keys.rs");
+
+        for (name, spec) in contract["commands"]
+            .as_object()
+            .expect("the contract holds the commands")
+        {
+            let arguments = spec["args"]
+                .as_object()
+                .expect("the contract holds the arguments of the command");
+
+            if !crate::key_commands::COMMANDS.contains(&name.as_str()) {
+                continue;
+            }
+
+            for field in arguments.keys() {
+                assert!(
+                    source.contains(&format!("{field}: String")),
+                    "the key command {name} does not read {field}, which the contract holds"
+                );
+            }
+        }
     }
 
     #[test]
