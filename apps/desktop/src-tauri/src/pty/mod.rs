@@ -205,7 +205,6 @@ pub(crate) mod testing {
             wait_until(Duration::from_secs(15), || self.text(id).contains(needle))
         }
 
-
         /// Wait until a session reported its exit.
         pub fn wait_for_exit(&self, id: &str) -> Option<ExitPayload> {
             wait_until(Duration::from_secs(15), || !self.exits(id).is_empty());

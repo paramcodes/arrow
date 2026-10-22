@@ -296,7 +296,8 @@ mod tests {
 
     /// A directory of its own for one test.
     fn scratch(name: &str) -> PathBuf {
-        let directory = std::env::temp_dir().join(format!("arrow-search-{name}-{}", std::process::id()));
+        let directory =
+            std::env::temp_dir().join(format!("arrow-search-{name}-{}", std::process::id()));
         let _ = fs::remove_dir_all(&directory);
         fs::create_dir_all(&directory).expect("the scratch directory");
         directory

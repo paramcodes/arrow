@@ -494,7 +494,10 @@ mod tests {
 
         let payload = serde_json::to_value(&stat).expect("the payload");
 
-        assert_eq!(payload["filesChanged"], 2, "the spelling the frontend reads");
+        assert_eq!(
+            payload["filesChanged"], 2,
+            "the spelling the frontend reads"
+        );
         assert!(
             payload.get("files_changed").is_none(),
             "one field carries one spelling"

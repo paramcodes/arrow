@@ -60,7 +60,9 @@ fn refuse_secret(value: &Value) -> Result<(), String> {
 /// Read the settings of the app, or nothing when it has never saved any.
 #[tauri::command]
 pub fn load_settings(app: AppHandle) -> Result<Option<Value>, String> {
-    let store = app.store(SETTINGS_FILE).map_err(|error| error.to_string())?;
+    let store = app
+        .store(SETTINGS_FILE)
+        .map_err(|error| error.to_string())?;
     Ok(store.get(SETTINGS_KEY))
 }
 
@@ -72,7 +74,9 @@ pub fn load_settings(app: AppHandle) -> Result<Option<Value>, String> {
 pub fn save_settings(app: AppHandle, settings: Value) -> Result<(), String> {
     refuse_secret(&settings)?;
 
-    let store = app.store(SETTINGS_FILE).map_err(|error| error.to_string())?;
+    let store = app
+        .store(SETTINGS_FILE)
+        .map_err(|error| error.to_string())?;
     store.set(SETTINGS_KEY, settings);
     store.save().map_err(|error| error.to_string())
 }
