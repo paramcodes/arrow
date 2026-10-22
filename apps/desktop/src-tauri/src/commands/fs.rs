@@ -146,10 +146,8 @@ mod tests {
                 .duration_since(UNIX_EPOCH)
                 .expect("the clock is after the epoch")
                 .as_nanos();
-            let path = std::env::temp_dir().join(format!(
-                "arrow-fs-{name}-{}-{stamp}",
-                std::process::id()
-            ));
+            let path = std::env::temp_dir()
+                .join(format!("arrow-fs-{name}-{}-{stamp}", std::process::id()));
             fs::create_dir_all(&path).expect("the scratch directory");
             Self { path }
         }
@@ -182,7 +180,8 @@ mod tests {
         create_entry(scratch.file("alpha.txt"), false).expect("the file");
         create_entry(scratch.file("src"), true).expect("the directory");
 
-        let entries = read_directory(scratch.path.to_string_lossy().into_owned()).expect("the read");
+        let entries =
+            read_directory(scratch.path.to_string_lossy().into_owned()).expect("the read");
         let names: Vec<&str> = entries.iter().map(|entry| entry.name.as_str()).collect();
 
         assert_eq!(names, ["src", "alpha.txt", "zeta.txt"]);

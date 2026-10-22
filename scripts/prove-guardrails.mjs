@@ -133,6 +133,7 @@ const EXPECTED_PROOF_NAMES = [
   "the ratchet criterion fails when the procedure is deleted",
   "the real window criterion fails when the workflow drops the artifact upload",
   "the real window criterion fails when the workflow stops running the script",
+  "the rust tree that is not formatted is caught",
   "the scorer refuses a second run while the tree lock is held",
   "the second toolchain criterion fails when the rust gate only prints",
   "the shell content padding that leaves eight pixels is caught",

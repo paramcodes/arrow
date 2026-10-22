@@ -114,6 +114,7 @@ const EXPECTED_CRITERIA = {
   behavioral: { run: "${PM} test:e2e" },
   artifact: { build: "${PM} build" },
   "second-toolchain": { run: "cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml" },
+  "rust-format": { run: "cargo fmt --check --manifest-path apps/desktop/src-tauri/Cargo.toml" },
 };
 
 const EXPECTED_CRITERION_IDS = Object.keys(EXPECTED_CRITERIA);
@@ -186,6 +187,7 @@ const EXPECTED_PROOF_NAMES = [
   "the ratchet criterion fails when the procedure is deleted",
   "the real window criterion fails when the workflow drops the artifact upload",
   "the real window criterion fails when the workflow stops running the script",
+  "the rust tree that is not formatted is caught",
   "the scorer refuses a second run while the tree lock is held",
   "the second toolchain criterion fails when the rust gate only prints",
   "the shell content padding that leaves eight pixels is caught",

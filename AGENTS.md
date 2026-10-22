@@ -36,6 +36,7 @@ below names the path that fails when the rule breaks.
 - CI runs the same canonical commands, the end to end suite and scores the harness. Enforced by: .github/workflows/ci.yml
 - The built application opens a real window that paints, and the workflow that runs the check on a schedule keeps its display and its screenshot. Enforced by: .github/workflows/real-window.yml
 - Work happens on a task branch, never on the default branch. Enforced by: scripts/guard-branch.sh
+- The Rust tree is formatted with rustfmt, and `cargo fmt --check` fails when it is not. Enforced by: harness.config.json
 
 ## Where things live
 
