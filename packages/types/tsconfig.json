@@ -9,6 +9,6 @@
     "sourceMap": true,
     "tsBuildInfoFile": "dist/tsconfig.tsbuildinfo"
   },
-  "include": ["src/**/*"],
+  "include": ["src/**/*", "src/**/*.json"],
   "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx"]
 }

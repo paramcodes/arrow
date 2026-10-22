@@ -4,7 +4,7 @@
     "exec": "pnpm exec"
   },
   "minimumCriteria": 13,
-  "minimumProofs": 71,
+  "minimumProofs": 72,
   "agents": {
     "file": "AGENTS.md",
     "entryPoint": "CLAUDE.md",
@@ -1271,6 +1271,20 @@
         "run": "node -e \"const fs=require('fs'),path=require('path');const dir='apps/desktop/src-tauri/src/ai';const files=fs.readdirSync(dir,{recursive:true}).filter((f)=>f.endsWith('.rs'));let bad=[];for(const file of files){const source=fs.readFileSync(path.join(dir,file),'utf8');const m=source.match(/pub enum AiError \\{([\\s\\S]*?)\\n\\}/);if(m&&/^[ \\t]*key[ \\t]*:/m.test(m[1]))bad.push(file)}if(bad.length){console.error('the error of the AI client carries the key: '+bad.join(' '));process.exit(1)}console.log('the error of the AI client carries no key')\"",
         "exit": "zero",
         "contains": "the error of the AI client carries no key"
+      }
+    },
+    {
+      "name": "the AI boundary that drifts from the contract is caught",
+      "write": [
+        {
+          "path": "apps/desktop/src/lib/ai.ts",
+          "content": "type Call = { command: string; args: Record<string, unknown> };\n\nconst calls: Call[] = [];\n\nexport const aiStub = {\n  get commandLog() {\n    return calls;\n  },\n  get tokens() {\n    return [] as string[];\n  },\n  get done() {\n    return false;\n  },\n};\n\nexport async function startCompletion(): Promise<void> {}\n\nexport async function startInlineEdit(): Promise<void> {}\n\nexport async function cancelRequest(): Promise<void> {}\n\nexport async function setApiKey(): Promise<void> {}\n\nexport async function hasApiKey(): Promise<boolean> {\n  return false;\n}\n\nexport async function deleteApiKey(): Promise<void> {}\n\nexport async function onAiToken(): Promise<() => void> {\n  const { listen } = await import(\"@tauri-apps/api/event\");\n  return listen<{ token: string }>(\"ai:token:\" + requestOf(), (event) => undefined);\n}\n\nexport async function onAiComplete(): Promise<() => void> {\n  return () => undefined;\n}\n\nexport async function onAiError(): Promise<() => void> {\n  return () => undefined;\n}\n"
+        }
+      ],
+      "expect": {
+        "run": "${PM_EXEC} vitest run apps/desktop/src/lib/ai.test.ts",
+        "exit": "nonzero",
+        "contains": "the boundary builds the token event from the contract"
       }
     },
     {

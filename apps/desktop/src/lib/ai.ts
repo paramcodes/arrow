@@ -7,6 +7,11 @@
  * when it fails. Escape ends a request through one command path, and that
  * path serves the ghost text and the inline edit alike.
  *
+ * The names of this boundary are not spelled here. The shell and the
+ * frontend read the same contract, `packages/types/src/ai-contract.json`,
+ * and this module takes its event names, its command names, the fields of
+ * the payloads and the fields of the arguments from it.
+ *
  * The key of a provider never crosses this module. The shell keeps it in the
  * keychain of the operating system, `get_api_key` answers whether a key
  * exists, and the answer is a boolean. The key that a reader types goes
@@ -20,8 +25,32 @@
 
 import { invokeCommand, isTauriHost, type UnlistenFn } from "./tauri";
 
+import {
+  AI_COMMANDS,
+  AI_CONTRACT,
+  type AiCommandArgs,
+  type AiCommandName,
+  type AiErrorPayload as AiErrorPayloadContract,
+  type AiCompletePayload as AiCompletePayloadContract,
+  type AiTokenPayload as AiTokenPayloadContract,
+} from "@arrow/types";
+
 /** The providers the feature knows. */
 export type AiProvider = "anthropic" | "openai" | "google";
+
+/** The payload of `ai:token:<request_id>`, read from the contract. */
+export type AiTokenPayload = AiTokenPayloadContract;
+
+/** The payload of `ai:complete:<request_id>`, read from the contract. */
+export type AiCompletePayload = AiCompletePayloadContract;
+
+/** The payload of `ai:error:<request_id>`, read from the contract. */
+export type AiErrorPayload = AiErrorPayloadContract;
+
+/**
+ * The command of the AI boundary, read from the contract.
+ */
+export type AiCommand = AiCommandName;
 
 /** A request for a completion. */
 export interface CompletionRequest {
@@ -50,35 +79,6 @@ export interface InlineEditRequest {
   /** The text the edit applies to. */
   readonly selection: string;
 }
-
-/** The payload of `ai:token:{request_id}`. */
-export interface AiTokenPayload {
-  /** The text of the token. */
-  readonly token: string;
-  /** False while the stream is running. */
-  readonly done: boolean;
-}
-
-/** The payload of `ai:complete:{request_id}`. */
-export interface AiCompletePayload {
-  /** True when the stream ended. */
-  readonly done: boolean;
-}
-
-/** The payload of `ai:error:{request_id}`. */
-export interface AiErrorPayload {
-  /** The message of the failure. It never carries a key. */
-  readonly error: string;
-}
-
-/** The commands the frontend sends to the shell. */
-export type AiCommand =
-  | "complete"
-  | "inline_edit"
-  | "cancel_request"
-  | "set_api_key"
-  | "get_api_key"
-  | "delete_api_key";
 
 /** One command the boundary sent, for the end to end suite. */
 export interface AiCall {
@@ -217,37 +217,37 @@ class AiStub {
 
   /** Record a call and answer with the canned stream of tokens. */
   complete(requestId: string, args: Readonly<Record<string, unknown>>): void {
-    this.calls.push({ command: "complete", args });
+    this.calls.push({ command: AI_COMMANDS.complete, args });
     this.replay(requestId, STUB_TOKENS);
   }
 
   /** Record a call and answer with the canned stream of the proposed edit. */
   inlineEdit(requestId: string, args: Readonly<Record<string, unknown>>): void {
-    this.calls.push({ command: "inline_edit", args });
+    this.calls.push({ command: AI_COMMANDS.inline_edit, args });
     this.replay(requestId, editTokens(editProposal(args.selection)));
   }
 
   /** Record a call and stop the stream of a request. */
   cancel(requestId: string): void {
-    this.calls.push({ command: "cancel_request", args: { requestId } });
+    this.calls.push({ command: AI_COMMANDS.cancel_request, args: { requestId } });
     this.stop(requestId);
   }
 
   /** Record a call. The key is never part of the record. */
   setKey(provider: AiProvider): void {
-    this.calls.push({ command: "set_api_key", args: { provider, key: REDACTED } });
+    this.calls.push({ command: AI_COMMANDS.set_api_key, args: { provider, key: REDACTED } });
     this.keys.add(provider);
   }
 
   /** Record a call and answer whether the provider has a key. */
   getKey(provider: AiProvider): boolean {
-    this.calls.push({ command: "get_api_key", args: { provider } });
+    this.calls.push({ command: AI_COMMANDS.get_api_key, args: { provider } });
     return this.keys.has(provider);
   }
 
   /** Record a call. */
   deleteKey(provider: AiProvider): void {
-    this.calls.push({ command: "delete_api_key", args: { provider } });
+    this.calls.push({ command: AI_COMMANDS.delete_api_key, args: { provider } });
     this.keys.delete(provider);
   }
 
@@ -351,13 +351,13 @@ export const aiStub = new AiStub();
  */
 export async function startCompletion(request: CompletionRequest): Promise<void> {
   if (isTauriHost()) {
-    await invokeCommand<void>("complete", {
+    await invokeCommand<void>(AI_COMMANDS.complete, {
       requestId: request.requestId,
       provider: request.provider,
       model: request.model,
       prompt: request.prompt,
       context: request.context,
-    });
+    } satisfies AiCommandArgs<typeof AI_COMMANDS.complete>);
     return;
   }
 
@@ -378,13 +378,13 @@ export async function startCompletion(request: CompletionRequest): Promise<void>
  */
 export async function startInlineEdit(request: InlineEditRequest): Promise<void> {
   if (isTauriHost()) {
-    await invokeCommand<void>("inline_edit", {
+    await invokeCommand<void>(AI_COMMANDS.inline_edit, {
       requestId: request.requestId,
       provider: request.provider,
       model: request.model,
       instruction: request.instruction,
       selection: request.selection,
-    });
+    } satisfies AiCommandArgs<typeof AI_COMMANDS.inline_edit>);
     return;
   }
 
@@ -405,7 +405,9 @@ export async function startInlineEdit(request: InlineEditRequest): Promise<void>
  */
 export async function cancelRequest(requestId: string): Promise<void> {
   if (isTauriHost()) {
-    await invokeCommand<void>("cancel_request", { requestId });
+    await invokeCommand<void>(AI_COMMANDS.cancel_request, {
+      requestId,
+    } satisfies AiCommandArgs<typeof AI_COMMANDS.cancel_request>);
     return;
   }
 
@@ -420,7 +422,10 @@ export async function cancelRequest(requestId: string): Promise<void> {
  */
 export async function setApiKey(provider: AiProvider, key: string): Promise<void> {
   if (isTauriHost()) {
-    await invokeCommand<void>("set_api_key", { provider, key });
+    await invokeCommand<void>(AI_COMMANDS.set_api_key, {
+      provider,
+      key,
+    } satisfies AiCommandArgs<typeof AI_COMMANDS.set_api_key>);
     return;
   }
 
@@ -434,7 +439,9 @@ export async function setApiKey(provider: AiProvider, key: string): Promise<void
  */
 export async function hasApiKey(provider: AiProvider): Promise<boolean> {
   if (isTauriHost()) {
-    const answer = await invokeCommand<boolean>("get_api_key", { provider });
+    const answer = await invokeCommand<boolean>(AI_COMMANDS.get_api_key, {
+      provider,
+    } satisfies AiCommandArgs<typeof AI_COMMANDS.get_api_key>);
     return answer ?? false;
   }
 
@@ -444,7 +451,9 @@ export async function hasApiKey(provider: AiProvider): Promise<boolean> {
 /** Remove the key of a provider. */
 export async function deleteApiKey(provider: AiProvider): Promise<void> {
   if (isTauriHost()) {
-    await invokeCommand<void>("delete_api_key", { provider });
+    await invokeCommand<void>(AI_COMMANDS.delete_api_key, {
+      provider,
+    } satisfies AiCommandArgs<typeof AI_COMMANDS.delete_api_key>);
     return;
   }
 
@@ -458,7 +467,9 @@ export async function onAiToken(
 ): Promise<UnlistenFn> {
   if (isTauriHost()) {
     const { listen } = await import("@tauri-apps/api/event");
-    return listen<AiTokenPayload>(`ai:token:${requestId}`, (event) => handler(event.payload));
+    return listen<AiTokenPayload>(`${AI_CONTRACT.events.token.prefix}${requestId}`, (event) =>
+      handler(event.payload),
+    );
   }
 
   return aiStub.onToken(requestId, handler);
@@ -471,7 +482,9 @@ export async function onAiComplete(
 ): Promise<UnlistenFn> {
   if (isTauriHost()) {
     const { listen } = await import("@tauri-apps/api/event");
-    return listen<AiCompletePayload>(`ai:complete:${requestId}`, (event) => handler(event.payload));
+    return listen<AiCompletePayload>(`${AI_CONTRACT.events.complete.prefix}${requestId}`, (event) =>
+      handler(event.payload),
+    );
   }
 
   return aiStub.onComplete(requestId, handler);
@@ -484,7 +497,9 @@ export async function onAiError(
 ): Promise<UnlistenFn> {
   if (isTauriHost()) {
     const { listen } = await import("@tauri-apps/api/event");
-    return listen<AiErrorPayload>(`ai:error:${requestId}`, (event) => handler(event.payload));
+    return listen<AiErrorPayload>(`${AI_CONTRACT.events.error.prefix}${requestId}`, (event) =>
+      handler(event.payload),
+    );
   }
 
   return aiStub.onError(requestId, handler);

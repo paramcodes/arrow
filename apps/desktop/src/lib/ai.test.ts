@@ -1,4 +1,8 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+
+import { AI_CONTRACT } from "@arrow/types";
 
 import {
   aiStub,
@@ -32,6 +36,62 @@ async function waitForTokens(requestId: string, count: number): Promise<string[]
 
   return [...aiStub.tokens];
 }
+
+describe("the contract of the AI boundary", () => {
+  /**
+   * The source of the boundary, with its comments taken out.
+   *
+   * The comments talk about the names of the boundary, and the contract
+   * holds the names, so the case reads the code and only the code.
+   */
+  function boundarySource(): string {
+    return readFileSync(fileURLToPath(new URL("./ai.ts", import.meta.url)), "utf8")
+      .split("\n")
+      .filter((line) => !/^\s*(\/\/|\*|\/\*)/.test(line))
+      .join("\n");
+  }
+
+  it("builds every event name from the contract", () => {
+    const source = boundarySource();
+
+    for (const [id] of Object.entries(AI_CONTRACT.events)) {
+      expect(source, `the boundary builds the ${id} event from the contract`).toContain(
+        `events.${id}.prefix`,
+      );
+    }
+
+    for (const spec of Object.values(AI_CONTRACT.events)) {
+      expect(
+        source,
+        `the boundary spells "${spec.prefix}" on its own, which is the name of the contract`,
+      ).not.toContain(`"${spec.prefix}"`);
+    }
+  });
+
+  it("sends every command by the name of the contract", () => {
+    const source = boundarySource();
+
+    for (const name of Object.keys(AI_CONTRACT.commands)) {
+      expect(source, `the boundary sends ${name} from the contract`).toContain(
+        `AI_COMMANDS.${name}`,
+      );
+      expect(
+        source,
+        `the invitation of ${name} is spelled in the boundary, which is the name of the contract`,
+      ).not.toMatch(new RegExp(`invokeCommand<[^>]*>\\(\\s*"${name}"`));
+    }
+  });
+
+  it("keeps no payload of its own", () => {
+    const source = boundarySource();
+
+    for (const name of ["AiTokenPayload", "AiCompletePayload", "AiErrorPayload"]) {
+      expect(source, `the payload ${name} is read from the contract`).not.toContain(
+        `interface ${name}`,
+      );
+    }
+  });
+});
 
 describe("the AI boundary", () => {
   it("replays the token stream of a completion", async () => {

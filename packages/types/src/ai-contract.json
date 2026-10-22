@@ -1,0 +1,37 @@
+{
+  "$comment": "The one contract of the AI boundary. The Rust shell (apps/desktop/src-tauri/src/commands/ai.rs) and the frontend (apps/desktop/src/lib/ai.ts) both read this file, and neither names an event, a payload field, a command or an argument anywhere else. Each event carries the prefix that names it. The value of a field names the type of the field by example: an empty text is a string and false is a boolean.",
+  "events": {
+    "token": {
+      "prefix": "ai:token:",
+      "payload": { "token": "", "done": false }
+    },
+    "complete": {
+      "prefix": "ai:complete:",
+      "payload": { "done": false }
+    },
+    "error": {
+      "prefix": "ai:error:",
+      "payload": { "error": "" }
+    }
+  },
+  "commands": {
+    "complete": {
+      "args": { "requestId": "", "provider": "", "model": "", "prompt": "", "context": "" }
+    },
+    "inline_edit": {
+      "args": { "requestId": "", "provider": "", "model": "", "instruction": "", "selection": "" }
+    },
+    "cancel_request": {
+      "args": { "requestId": "" }
+    },
+    "set_api_key": {
+      "args": { "provider": "", "key": "" }
+    },
+    "get_api_key": {
+      "args": { "provider": "" }
+    },
+    "delete_api_key": {
+      "args": { "provider": "" }
+    }
+  }
+}
