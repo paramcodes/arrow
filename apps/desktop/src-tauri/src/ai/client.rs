@@ -142,15 +142,23 @@ pub async fn stream_to(
             message: redact(&error.to_string(), key),
         })?;
 
-    let mut builder = client.post(&parts.url);
-    for (name, value) in &parts.headers {
-        builder = builder.header(name.as_str(), value.as_str());
-    }
+    // The parts hand over the whole request, body included. The sender never
+    // holds the url, the headers or the body on their own, so it cannot build
+    // a request that leaves the payload behind.
+    let request = parts
+        .into_request(&client)
+        .map_err(|error| AiError::Transport {
+            provider,
+            message: redact(&error.to_string(), key),
+        })?;
 
-    let mut response = builder.send().await.map_err(|error| AiError::Transport {
-        provider,
-        message: redact(&error.to_string(), key),
-    })?;
+    let mut response = client
+        .execute(request)
+        .await
+        .map_err(|error| AiError::Transport {
+            provider,
+            message: redact(&error.to_string(), key),
+        })?;
 
     let status = response.status();
     if !status.is_success() {
@@ -257,6 +265,145 @@ mod tests {
             }
         });
         (format!("http://{address}"), handle)
+    }
+
+    /// The index just past the blank line that ends the head of a request.
+    fn head_end(bytes: &[u8]) -> Option<usize> {
+        bytes
+            .windows(4)
+            .position(|window| window == b"\r\n\r\n")
+            .map(|index| index + 4)
+    }
+
+    /// The length the `content-length` header of a received request names.
+    fn content_length(bytes: &[u8]) -> usize {
+        String::from_utf8_lossy(bytes)
+            .lines()
+            .find_map(|line| {
+                let (name, value) = line.split_once(':')?;
+                if !name.trim().eq_ignore_ascii_case("content-length") {
+                    return None;
+                }
+                value.trim().parse().ok()
+            })
+            .unwrap_or(0)
+    }
+
+    /// Whether the bytes carry the text, byte for byte.
+    fn carries(bytes: &[u8], text: &str) -> bool {
+        bytes
+            .windows(text.len())
+            .any(|window| window == text.as_bytes())
+    }
+
+    /// A server that reads the whole request, body included, and answers with
+    /// a stream of one token.
+    ///
+    /// It hands back the bytes it received, so a test reads what reached the
+    /// wire instead of what the client meant to send. Every read is capped in
+    /// time, so a client that never sends the body fails the test instead of
+    /// hanging the suite.
+    async fn recording_server() -> (String, tokio::task::JoinHandle<Vec<u8>>) {
+        let listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("the recording server binds a port");
+        let address = listener
+            .local_addr()
+            .expect("the recording server has an address");
+        let handle = tokio::spawn(async move {
+            let (mut socket, _) = listener
+                .accept()
+                .await
+                .expect("the recording server accepts a connection");
+            let mut received: Vec<u8> = Vec::new();
+            let mut buffer = [0_u8; 1024];
+
+            while head_end(&received).is_none() {
+                let read = tokio::time::timeout(Duration::from_secs(2), socket.read(&mut buffer))
+                    .await
+                    .expect("the head of the request arrives in time")
+                    .expect("the recording server reads the head");
+                if read == 0 {
+                    break;
+                }
+                received.extend_from_slice(&buffer[..read]);
+            }
+
+            let end = head_end(&received).unwrap_or(received.len());
+            let length = content_length(&received);
+            while received.len() < end + length {
+                let read = tokio::time::timeout(Duration::from_secs(2), socket.read(&mut buffer))
+                    .await
+                    .expect("the body of the request arrives in time")
+                    .expect("the recording server reads the body");
+                if read == 0 {
+                    break;
+                }
+                received.extend_from_slice(&buffer[..read]);
+            }
+
+            let body = "data: {\"choices\":[{\"delta\":{\"content\":\"Hi\"}}]}\n\ndata: [DONE]\n\n";
+            let response = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nContent-Length: {}\r\n\r\n{body}",
+                body.len()
+            );
+            socket
+                .write_all(response.as_bytes())
+                .await
+                .expect("the recording server answers");
+            socket.flush().await.ok();
+            received
+        });
+        (format!("http://{address}"), handle)
+    }
+
+    #[tokio::test]
+    async fn the_bytes_that_reach_the_server_carry_the_prompt_and_the_messages() {
+        let prompt = "refactor the parser of the tree";
+        let message = "you are Arrow, the editor";
+
+        for provider in PROVIDERS {
+            let (address, server) = recording_server().await;
+            let request = AiRequest {
+                prompt: prompt.to_string(),
+                context: vec![ContextItem::new(ContextRole::System, message)],
+                ..request_for(provider)
+            };
+
+            stream_to(&request, KEY, |_event| {}, &endpoints_at(&address))
+                .await
+                .expect("the request succeeds");
+
+            let received = server.await.expect("the recording server task ends");
+            let end = head_end(&received).expect("the server received a head");
+            let head = String::from_utf8_lossy(&received[..end]).to_ascii_lowercase();
+            let body = &received[end..];
+
+            assert!(
+                !body.is_empty(),
+                "the request of {provider:?} carries a body: {:?}",
+                String::from_utf8_lossy(body)
+            );
+            assert!(
+                carries(body, prompt),
+                "the body of {provider:?} carries the prompt: {:?}",
+                String::from_utf8_lossy(body)
+            );
+            assert!(
+                carries(body, message),
+                "the body of {provider:?} carries the message: {:?}",
+                String::from_utf8_lossy(body)
+            );
+            assert!(
+                head.contains("content-type: application/json"),
+                "the request of {provider:?} is JSON: {head}"
+            );
+            assert!(
+                !carries(body, KEY),
+                "the body of {provider:?} carries no key: {:?}",
+                String::from_utf8_lossy(body)
+            );
+        }
     }
 
     /// The endpoints that point every provider at the given address.
@@ -483,7 +630,7 @@ mod tests {
             KEY,
             endpoints.base_for(Provider::Anthropic),
         );
-        assert_eq!(anthropic.url, "http://127.0.0.1:8787/v1/messages");
+        assert_eq!(anthropic.url(), "http://127.0.0.1:8787/v1/messages");
         assert_eq!(anthropic.header("x-api-key"), Some(KEY));
 
         let openai = providers::build_request_at(
@@ -491,7 +638,7 @@ mod tests {
             KEY,
             endpoints.base_for(Provider::OpenAi),
         );
-        assert_eq!(openai.url, "http://127.0.0.1:8787/v1/chat/completions");
+        assert_eq!(openai.url(), "http://127.0.0.1:8787/v1/chat/completions");
         assert_eq!(
             openai.header("authorization").map(str::to_string),
             Some(format!("Bearer {KEY}"))
@@ -503,7 +650,7 @@ mod tests {
             endpoints.base_for(Provider::Google),
         );
         assert_eq!(
-            google.url,
+            google.url(),
             "http://127.0.0.1:8787/v1beta/models/gemini-2.0-flash:streamGenerateContent?alt=sse"
         );
         assert_eq!(google.header("x-goog-api-key"), Some(KEY));
@@ -539,7 +686,7 @@ mod tests {
                     endpoints.base_for(provider),
                 );
                 assert_eq!(
-                    parts.url,
+                    parts.url(),
                     provider_request_url(provider),
                     "the request of {provider:?} stays at the provider after {value:?}"
                 );
