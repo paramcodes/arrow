@@ -3,8 +3,8 @@
   "commands": {
     "exec": "pnpm exec"
   },
-  "minimumCriteria": 15,
-  "minimumProofs": 75,
+  "minimumCriteria": 16,
+  "minimumProofs": 76,
   "agents": {
     "file": "AGENTS.md",
     "entryPoint": "CLAUDE.md",
@@ -148,6 +148,13 @@
         ]
       },
       {
+        "match": "Every file that carries the app version names one version",
+        "path": "scripts/check-version.mjs",
+        "kind": "command",
+        "run": "node scripts/check-version.mjs",
+        "contains": "the version files agree"
+      },
+      {
         "match": "The built application opens a real window that paints",
         "path": ".github/workflows/real-window.yml",
         "kind": "yamlStructure",
@@ -238,6 +245,15 @@
         "type": "command",
         "run": "node scripts/check-theme-discipline.mjs",
         "contains": "no-hardcoded-colors"
+      }
+    },
+    {
+      "id": "version-agreement",
+      "why": "every file that carries the app version names the same version",
+      "check": {
+        "type": "command",
+        "run": "node scripts/check-version.mjs",
+        "contains": "the version files agree"
       }
     },
     {
@@ -1469,6 +1485,32 @@
       }
     },
     {
+      "name": "the version check fails when two files disagree",
+      "write": [
+        {
+          "path": ".version-probe/package.json",
+          "content": "{\"name\":\"arrow\",\"version\":\"0.5.0\"}\n"
+        },
+        {
+          "path": ".version-probe/apps/desktop/package.json",
+          "content": "{\"name\":\"@arrow/desktop\",\"version\":\"0.5.0\"}\n"
+        },
+        {
+          "path": ".version-probe/apps/desktop/src-tauri/Cargo.toml",
+          "content": "[package]\nname = \"arrow-desktop\"\nversion = \"0.5.0\"\n"
+        },
+        {
+          "path": ".version-probe/apps/desktop/src-tauri/tauri.conf.json",
+          "content": "{\"productName\":\"Arrow\",\"version\":\"0.4.0\"}\n"
+        }
+      ],
+      "expect": {
+        "run": "ARROW_VERSION_ROOT=.version-probe node scripts/check-version.mjs",
+        "exit": "nonzero",
+        "contains": "apps/desktop/src-tauri/tauri.conf.json says 0.4.0"
+      }
+    },
+    {
       "name": "the rust tree that is not formatted is caught",
       "write": [
         {
@@ -1520,7 +1562,8 @@
     "The scorer counts the criteria separately from the gates. The coverage gate and the proof-set gate are reported on their own lines and never inflate the score, so a score of 15 means fifteen criteria passed.",
     "maxHarnessSeconds is the ceiling of one score. The score runs the verify gate, the proof run, the end to end suite, the build and the Rust tests, so the ceiling sits above what a warm cache costs. A ceiling the default cannot meet is a ceiling that ships red.",
     "One tree has one gate at a time. The scorer, the prover and the self proof take the same exclusive lock, so a score and a proof run cannot interleave and read a tree that a probe has half replaced. The wait for the lock is bounded, and the refusal names the run that holds it and how long it has held it.",
-    "A proof case that writes a configuration of its own writes ${PROOF_COUNT} for the size of the proof set, so the payload never goes stale when a proof case is added."
+    "A proof case that writes a configuration of its own writes ${PROOF_COUNT} for the size of the proof set, so the payload never goes stale when a proof case is added.",
+    "The version-agreement criterion reads the four files that carry the application version through ARROW_VERSION_ROOT, which defaults to the working directory. The four are package.json, apps/desktop/package.json, apps/desktop/src-tauri/Cargo.toml and apps/desktop/src-tauri/tauri.conf.json. The workspace packages under packages/ version on their own and are not carriers of the application version."
   ],
   "maxHarnessSeconds": 1800
 }

@@ -1,6 +1,6 @@
 {
   "name": "arrow",
-  "version": "0.1.0",
+  "version": "0.5.0",
   "private": true,
   "type": "module",
   "description": "Arrow, an AI-native code editor built with Tauri v2, React 19 and Vite.",

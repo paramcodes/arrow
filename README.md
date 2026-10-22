@@ -48,6 +48,29 @@ A fresh window of Arrow, before a file is open.
   changed file.
 - A command palette on `Ctrl+Shift+P`, a project search, and a settings dialog whose values persist.
 
+## Download
+
+Every release publishes three Linux bundles for `x86_64`, built on Ubuntu by
+[`.github/workflows/release.yml`](.github/workflows/release.yml). Take the file that matches your
+system from the [releases page](https://github.com/paramcodes/arrow/releases).
+
+| File                             | What it is          | How to run or install it                                       |
+| -------------------------------- | ------------------- | -------------------------------------------------------------- |
+| `Arrow_<version>_amd64.AppImage` | A single executable | `chmod +x Arrow_<version>_amd64.AppImage` then run the file    |
+| `Arrow_<version>_amd64.deb`      | A Debian package    | `sudo apt install ./Arrow_<version>_amd64.deb`                 |
+| `Arrow-<version>-1.x86_64.rpm`   | An RPM package      | `sudo dnf install ./Arrow-<version>-1.x86_64.rpm`              |
+
+The `v0.5.0` release publishes `Arrow_0.5.0_amd64.AppImage`, `Arrow_0.5.0_amd64.deb` and
+`Arrow-0.5.0-1.x86_64.rpm`.
+
+The size and the SHA-256 of each file are written into the body of the release that carries it, in
+the same table as the download links. Every release also carries `SHA256SUMS.txt`, so a download is
+checked with:
+
+```bash
+sha256sum -c SHA256SUMS.txt
+```
+
 ## Requirements
 
 - Node.js 22 or newer. `package.json` asks for 22 or newer, and the workflow of CI installs 22.
@@ -160,7 +183,7 @@ Four boundaries hold the tree together, and each one names the path that fails w
 
 - [The MVP plan](docs/plan/mvp-plan.md) holds the eleven sessions of the plan and the exit gate of
   each.
-- [The architecture decision records](docs/adr/README.md) hold seven decisions, each with the
+- [The architecture decision records](docs/adr/README.md) hold eight decisions, each with the
   options it replaced.
 - [The mistake log](docs/mistake-log.md) holds every mistake the repository has made and the
   guardrail that now catches it.
