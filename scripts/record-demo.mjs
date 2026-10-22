@@ -739,13 +739,13 @@ const clipList = [
       await sleep(500);
       await key(ctx.display, "Escape");
       await sleep(400);
-      verifySettings(ctx);
+      verifySettings();
     },
   },
 ];
 
-/** Prove the settings dialog wrote the font size to the disk of the app. */
-function verifySettings(ctx) {
+/** Prove the settings dialog wrote the change to its own file. */
+function verifySettings() {
   const found = [];
   const walk = (directory) => {
     if (!existsSync(directory)) return;
