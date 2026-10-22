@@ -5,6 +5,7 @@
 //! end of the answer arrives as a `message_stop`, and a failure arrives as an
 //! `error`.
 
+use reqwest::Method;
 use serde_json::{json, Value};
 
 use crate::ai::models::{AiEvent, AiRequest, ContextRole};
@@ -50,16 +51,16 @@ pub fn build_request_at(req: &AiRequest, key: &str, base_url: &str) -> HttpReque
         body["system"] = json!(system);
     }
 
-    HttpRequestParts {
-        method: "POST",
-        url: format!("{}/v1/messages", base_url.trim_end_matches('/')),
-        headers: vec![
+    HttpRequestParts::new(
+        Method::POST,
+        format!("{}/v1/messages", base_url.trim_end_matches('/')),
+        vec![
             ("x-api-key".to_string(), key.to_string()),
             ("anthropic-version".to_string(), API_VERSION.to_string()),
             ("content-type".to_string(), "application/json".to_string()),
         ],
-        body: serde_json::to_string(&body).expect("the body of a request is JSON"),
-    }
+        serde_json::to_string(&body).expect("the body of a request is JSON"),
+    )
 }
 
 /// The events of one raw chunk of the Anthropic stream.
@@ -120,8 +121,8 @@ mod tests {
     fn the_request_goes_to_the_messages_endpoint_with_the_key() {
         let parts = build_request(&request(), "sk-ant-the-key");
 
-        assert_eq!(parts.method, "POST");
-        assert_eq!(parts.url, "https://api.anthropic.com/v1/messages");
+        assert_eq!(parts.method().as_str(), "POST");
+        assert_eq!(parts.url(), "https://api.anthropic.com/v1/messages");
         assert_eq!(parts.header("x-api-key"), Some("sk-ant-the-key"));
         assert_eq!(parts.header("anthropic-version"), Some("2023-06-01"));
         assert_eq!(parts.header("content-type"), Some("application/json"));
@@ -129,7 +130,7 @@ mod tests {
 
     #[test]
     fn the_body_carries_the_model_the_budget_the_system_and_the_turns() {
-        let body: Value = serde_json::from_str(&build_request(&request(), "sk-ant-the-key").body)
+        let body: Value = serde_json::from_str(&build_request(&request(), "sk-ant-the-key").body())
             .expect("the body is JSON");
 
         assert_eq!(body["model"], "claude-sonnet-4-5");
@@ -152,7 +153,7 @@ mod tests {
         let mut without_system = request();
         without_system.context.clear();
         let body: Value =
-            serde_json::from_str(&build_request(&without_system, "sk-ant-the-key").body)
+            serde_json::from_str(&build_request(&without_system, "sk-ant-the-key").body())
                 .expect("the body is JSON");
 
         assert!(body.get("system").is_none(), "the body has no system field");
@@ -161,7 +162,7 @@ mod tests {
     #[test]
     fn the_base_url_can_point_at_another_server() {
         let parts = build_request_at(&request(), "sk-ant-the-key", "http://127.0.0.1:8080/");
-        assert_eq!(parts.url, "http://127.0.0.1:8080/v1/messages");
+        assert_eq!(parts.url(), "http://127.0.0.1:8080/v1/messages");
     }
 
     #[test]

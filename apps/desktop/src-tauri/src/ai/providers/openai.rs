@@ -5,6 +5,7 @@
 //! the end of the answer arrives in the `finish_reason` of a choice, and the
 //! stream ends with the sentinel `[DONE]`.
 
+use reqwest::Method;
 use serde_json::{json, Value};
 
 use crate::ai::models::{AiEvent, AiRequest};
@@ -38,15 +39,15 @@ pub fn build_request_at(req: &AiRequest, key: &str, base_url: &str) -> HttpReque
         "stream": true,
     });
 
-    HttpRequestParts {
-        method: "POST",
-        url: format!("{}/v1/chat/completions", base_url.trim_end_matches('/')),
-        headers: vec![
+    HttpRequestParts::new(
+        Method::POST,
+        format!("{}/v1/chat/completions", base_url.trim_end_matches('/')),
+        vec![
             ("authorization".to_string(), format!("Bearer {key}")),
             ("content-type".to_string(), "application/json".to_string()),
         ],
-        body: serde_json::to_string(&body).expect("the body of a request is JSON"),
-    }
+        serde_json::to_string(&body).expect("the body of a request is JSON"),
+    )
 }
 
 /// The events of one raw chunk of the OpenAI stream.
@@ -120,8 +121,8 @@ mod tests {
     fn the_request_goes_to_the_chat_completions_endpoint_with_the_key() {
         let parts = build_request(&request(), "sk-openai-the-key");
 
-        assert_eq!(parts.method, "POST");
-        assert_eq!(parts.url, "https://api.openai.com/v1/chat/completions");
+        assert_eq!(parts.method().as_str(), "POST");
+        assert_eq!(parts.url(), "https://api.openai.com/v1/chat/completions");
         assert_eq!(
             parts.header("authorization"),
             Some("Bearer sk-openai-the-key")
@@ -132,7 +133,7 @@ mod tests {
     #[test]
     fn the_body_carries_the_model_the_budget_and_the_turns() {
         let body: Value =
-            serde_json::from_str(&build_request(&request(), "sk-openai-the-key").body)
+            serde_json::from_str(&build_request(&request(), "sk-openai-the-key").body())
                 .expect("the body is JSON");
 
         assert_eq!(body["model"], "gpt-4o");
@@ -152,7 +153,7 @@ mod tests {
     #[test]
     fn the_base_url_can_point_at_another_server() {
         let parts = build_request_at(&request(), "sk-openai-the-key", "http://127.0.0.1:8080/");
-        assert_eq!(parts.url, "http://127.0.0.1:8080/v1/chat/completions");
+        assert_eq!(parts.url(), "http://127.0.0.1:8080/v1/chat/completions");
     }
 
     #[test]
