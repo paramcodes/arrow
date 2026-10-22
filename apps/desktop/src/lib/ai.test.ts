@@ -92,10 +92,21 @@ describe("the AI boundary", () => {
   });
 
   it("answers whether a provider has a key, and never answers with one", async () => {
+    await deleteApiKey("anthropic");
     const answer = await hasApiKey("anthropic");
 
     expect(typeof answer, "the bridge never returns the key").toBe("boolean");
     expect(answer).toBe(false);
+  });
+
+  it("remembers that a provider has a key, and never the key itself", async () => {
+    await setApiKey("google", "the-key-a-reader-typed");
+    const answer = await hasApiKey("google");
+
+    expect(answer, "the keychain of the browser build answers like the shell").toBe(true);
+    expect(JSON.stringify(aiStub.commandLog), "the stub keeps no key material").not.toContain(
+      "the-key-a-reader-typed",
+    );
   });
 
   it("keeps no key material in the log of the calls", async () => {
@@ -120,6 +131,29 @@ describe("the AI boundary", () => {
     const stop = await onAiError("request-4", (payload) => failures.push(payload.error));
 
     expect(failures).toEqual([]);
+    stop();
+  });
+
+  it("answers a request with a failure when it is told to fail", async () => {
+    const requestId = "request-5";
+    const failures: string[] = [];
+    const stop = await onAiError(requestId, (payload) => failures.push(payload.error));
+
+    aiStub.setFailure("there is no key for anthropic");
+
+    await startInlineEdit({
+      requestId,
+      provider: "anthropic",
+      model: "claude-sonnet-4-5",
+      instruction: "make it shorter",
+      selection: "const a = 1;",
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 200));
+
+    expect(failures, "the stub fails the way the shell fails").toEqual([
+      "there is no key for anthropic",
+    ]);
     stop();
   });
 });

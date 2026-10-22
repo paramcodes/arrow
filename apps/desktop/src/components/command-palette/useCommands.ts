@@ -5,6 +5,7 @@ import { useEditorStore } from "../../stores/editor";
 import { useLayoutStore, type ActivePanel } from "../../stores/layout";
 import { useOverlayStore, type PaletteMode } from "../../stores/overlay";
 import { chooseProject, useProjectStore } from "../../stores/project";
+import { acceptInlineEdit, rejectInlineEdit, startInlineEdit } from "../editor/inlineEditCommands";
 import { createCommands, type Command } from "./commands";
 
 /**
@@ -41,6 +42,9 @@ export function useCommands(): readonly Command[] {
         refreshGitStatus: () => {
           void useProjectStore.getState().refreshGitStatus();
         },
+        startInlineEdit,
+        acceptInlineEdit,
+        rejectInlineEdit,
       }),
     [],
   );
@@ -65,6 +69,11 @@ const READY_ATTRIBUTE = "data-arrow-ready";
 export function useCommandShortcuts(commands: readonly Command[]): void {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      // A shortcut the editor already answered is not answered twice. The
+      // editor handles the keys of the document itself, and it marks the
+      // event as it handles it.
+      if (event.defaultPrevented) return;
+
       for (const command of commands) {
         if (!command.shortcut) continue;
         if (!matchesShortcut(command.shortcut, event)) continue;

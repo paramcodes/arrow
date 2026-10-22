@@ -7,6 +7,7 @@ import { aiConnectionState } from "../editor/ghostTextMachine";
 import { useGhostTextStatus } from "../editor/useGhostTextStatus";
 import { useAiStore } from "../../stores/ai";
 import { useEditorStore } from "../../stores/editor";
+import { useOverlayStore } from "../../stores/overlay";
 import { useProjectStore } from "../../stores/project";
 import { useSettingsStore } from "../../stores/settings";
 
@@ -43,6 +44,7 @@ export function StatusBar() {
   const provider = useAiStore((state) => state.provider);
   const hasKey = useAiStore((state) => state.hasKey);
   const setHasKey = useAiStore((state) => state.setHasKey);
+  const openSettings = useOverlayStore((state) => state.openSettings);
   const ghostText = useGhostTextStatus();
   const ai = aiConnectionState(ghostText, hasKey);
 
@@ -93,14 +95,27 @@ export function StatusBar() {
                 : "The AI feature is ready"
           }
         >
-          {ai === "loading" ? (
-            <Circle className="h-3 w-3 text-accent" />
-          ) : ai === "ready" ? (
-            <Check className="h-3 w-3 text-success" />
+          {ai === "no-key" ? (
+            <button
+              className="flex items-center gap-1 text-ink hover:text-accent"
+              data-testid="status-ai-configure"
+              onClick={openSettings}
+              type="button"
+            >
+              <X className="h-3 w-3 text-error" />
+              AI
+              <span className="text-ink-tertiary">click to configure</span>
+            </button>
           ) : (
-            <X className="h-3 w-3 text-error" />
+            <>
+              {ai === "loading" ? (
+                <Circle className="h-3 w-3 text-accent" />
+              ) : (
+                <Check className="h-3 w-3 text-success" />
+              )}
+              AI
+            </>
           )}
-          AI
         </span>
         <span data-testid="status-language">{languageLabel(languageId)}</span>
         <span data-testid="status-tab-size">Spaces: {tabSize}</span>
