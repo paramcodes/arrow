@@ -56,8 +56,8 @@ system from the [releases page](https://github.com/paramcodes/arrow/releases).
 | `Arrow_<version>_amd64.deb`      | A Debian package    | `sudo apt install ./Arrow_<version>_amd64.deb`                 |
 | `Arrow-<version>-1.x86_64.rpm`   | An RPM package      | `sudo dnf install ./Arrow-<version>-1.x86_64.rpm`              |
 
-The `v0.5.0` release publishes `Arrow_0.5.0_amd64.AppImage`, `Arrow_0.5.0_amd64.deb` and
-`Arrow-0.5.0-1.x86_64.rpm`.
+The `v0.5.1` release publishes `Arrow_0.5.1_amd64.AppImage`, `Arrow_0.5.1_amd64.deb` and
+`Arrow-0.5.1-1.x86_64.rpm`.
 
 The size and the SHA-256 of each file are written into the body of the release that carries it, in
 the same table as the download links. Every release also carries `SHA256SUMS.txt`, so a download is
