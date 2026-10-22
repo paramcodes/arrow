@@ -3,8 +3,8 @@
   "commands": {
     "exec": "pnpm exec"
   },
-  "minimumCriteria": 14,
-  "minimumProofs": 73,
+  "minimumCriteria": 15,
+  "minimumProofs": 74,
   "agents": {
     "file": "AGENTS.md",
     "entryPoint": "CLAUDE.md",
@@ -172,6 +172,12 @@
         "path": "scripts/prove-harness.mjs",
         "kind": "criterion",
         "criterion": "proofs"
+      },
+      {
+        "match": "The Rust tree is formatted with rustfmt",
+        "path": "harness.config.json",
+        "kind": "criterion",
+        "criterion": "rust-format"
       }
     ]
   },
@@ -386,6 +392,14 @@
       "check": {
         "type": "command",
         "run": "cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml"
+      }
+    },
+    {
+      "id": "rust-format",
+      "why": "the Rust tree is formatted with rustfmt, so a reformat never hides inside a behaviour change",
+      "check": {
+        "type": "command",
+        "run": "cargo fmt --check --manifest-path apps/desktop/src-tauri/Cargo.toml"
       }
     }
   ],
@@ -1424,6 +1438,20 @@
         "exit": "nonzero",
         "contains": "apps/desktop/src-tauri/tauri.conf.json says 0.4.0"
       }
+    },
+    {
+      "name": "the rust tree that is not formatted is caught",
+      "write": [
+        {
+          "path": "apps/desktop/src-tauri/src/bin/__harness_probe.rs",
+          "content": "fn main() {\n    let values = vec![1,2,3];\n    let total: i32 = values.iter().sum();\n    println!(\"{total}\") ;\n}\n"
+        }
+      ],
+      "expect": {
+        "run": "cargo fmt --check --manifest-path apps/desktop/src-tauri/Cargo.toml",
+        "exit": "nonzero",
+        "contains": "__harness_probe.rs"
+      }
     }
   ],
   "notes": [
@@ -1432,7 +1460,7 @@
     "The layer list is the Arrow layer list. The workspace packages under packages/ may not import the Tauri API and may not import the desktop app; the desktop app owns every Tauri call.",
     "Raise minimumCriteria when a criterion is added. Never lower it to make the score pass. The scorer holds the exact set of criterion ids, so a criterion that is deleted, renamed or duplicated fails the score.",
     "minimumProofs is the floor on the proof set, and it lives here so the scorer and the prover cannot disagree about it. It must equal the number of proof cases the prover holds. Raise it when a proof case is added. Never lower it to make the score pass, and never empty the proof set: a proof run that proves nothing fails. The prover holds the exact set of proof names, so a proof case that is deleted, renamed or duplicated fails the run.",
-    "The scorer counts the criteria separately from the gates. The coverage gate and the proof-set gate are reported on their own lines and never inflate the score, so a score of 13 means thirteen criteria passed.",
+    "The scorer counts the criteria separately from the gates. The coverage gate and the proof-set gate are reported on their own lines and never inflate the score, so a score of 15 means fifteen criteria passed.",
     "maxHarnessSeconds is the ceiling of one score. The score runs the verify gate, the proof run, the end to end suite, the build and the Rust tests, so the ceiling sits above what a warm cache costs. A ceiling the default cannot meet is a ceiling that ships red.",
     "One tree has one gate at a time. The scorer, the prover and the self proof take the same exclusive lock, so a score and a proof run cannot interleave and read a tree that a probe has half replaced. The wait for the lock is bounded, and the refusal names the run that holds it and how long it has held it.",
     "A proof case that writes a configuration of its own writes ${PROOF_COUNT} for the size of the proof set, so the payload never goes stale when a proof case is added.",
