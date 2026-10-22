@@ -10,33 +10,78 @@ pub mod anthropic;
 pub mod google;
 pub mod openai;
 
+use reqwest::{Method, Request};
 use serde_json::Value;
 
 use crate::ai::models::{AiEvent, AiRequest, Provider};
 
 /// The parts of one HTTP request.
 ///
-/// The client sends the parts as they are, so a provider cannot change the
-/// request behind the back of the client.
+/// The fields are private and no accessor hands out a field that can be sent
+/// on its own. The only way out of the parts is [`HttpRequestParts::into_request`],
+/// which puts the method, the url, the headers and the body on one request in
+/// one expression. A caller therefore cannot build the request and leave the
+/// payload out, because it never holds the fields.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HttpRequestParts {
     /// The method of the request.
-    pub method: &'static str,
+    method: Method,
     /// The url the request goes to.
-    pub url: String,
+    url: String,
     /// The headers of the request, in the order they are sent.
-    pub headers: Vec<(String, String)>,
+    headers: Vec<(String, String)>,
     /// The body of the request.
-    pub body: String,
+    body: String,
 }
 
 impl HttpRequestParts {
+    /// The parts of one request.
+    pub fn new(method: Method, url: String, headers: Vec<(String, String)>, body: String) -> Self {
+        Self {
+            method,
+            url,
+            headers,
+            body,
+        }
+    }
+
+    /// The method of the request.
+    pub fn method(&self) -> &Method {
+        &self.method
+    }
+
+    /// The url the request goes to.
+    pub fn url(&self) -> &str {
+        &self.url
+    }
+
     /// The value of the header with this name, when the request carries one.
     pub fn header(&self, name: &str) -> Option<&str> {
         self.headers
             .iter()
             .find(|(key, _)| key.eq_ignore_ascii_case(name))
             .map(|(_, value)| value.as_str())
+    }
+
+    /// The body of the request.
+    ///
+    /// This reads the payload; it cannot build a request. A sender goes
+    /// through [`HttpRequestParts::into_request`], which attaches the body.
+    pub fn body(&self) -> &str {
+        &self.body
+    }
+
+    /// The request itself, carrying its method, its url, its headers and its
+    /// body.
+    ///
+    /// This is the only conversion from the parts to a request, and it takes
+    /// no argument that could leave the body behind.
+    pub fn into_request(self, client: &reqwest::Client) -> Result<Request, reqwest::Error> {
+        let mut builder = client.request(self.method, self.url.as_str());
+        for (name, value) in &self.headers {
+            builder = builder.header(name.as_str(), value.as_str());
+        }
+        builder.body(self.body).build()
     }
 }
 
@@ -148,15 +193,40 @@ mod tests {
 
     #[test]
     fn the_parts_of_a_request_carry_their_header_in_any_case() {
-        let parts = HttpRequestParts {
-            method: "POST",
-            url: "https://example.test/v1/messages".to_string(),
-            headers: vec![("X-Api-Key".to_string(), "the-key".to_string())],
-            body: "{}".to_string(),
-        };
+        let parts = HttpRequestParts::new(
+            Method::POST,
+            "https://example.test/v1/messages".to_string(),
+            vec![("X-Api-Key".to_string(), "the-key".to_string())],
+            "{}".to_string(),
+        );
         assert_eq!(parts.header("x-api-key"), Some("the-key"));
         assert_eq!(parts.header("X-API-KEY"), Some("the-key"));
         assert_eq!(parts.header("authorization"), None);
+    }
+
+    #[test]
+    fn the_request_of_the_parts_carries_their_body() {
+        let parts = HttpRequestParts::new(
+            Method::POST,
+            "https://example.test/v1/messages".to_string(),
+            vec![("content-type".to_string(), "application/json".to_string())],
+            r#"{"prompt":"refactor this"}"#.to_string(),
+        );
+
+        let request = parts
+            .into_request(&reqwest::Client::new())
+            .expect("the parts build a request");
+
+        assert_eq!(request.method(), Method::POST);
+        assert_eq!(request.url().as_str(), "https://example.test/v1/messages");
+        assert_eq!(
+            request
+                .body()
+                .and_then(|body| body.as_bytes())
+                .map(|bytes| bytes.to_vec()),
+            Some(br#"{"prompt":"refactor this"}"#.to_vec()),
+            "the request carries the body of the parts"
+        );
     }
 
     #[test]

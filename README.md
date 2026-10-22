@@ -67,6 +67,37 @@ checked with:
 sha256sum -c SHA256SUMS.txt
 ```
 
+## What it costs, measured
+
+<!-- perf-table:begin -->
+| Editor | Idle memory, warm launch, process tree (MiB) | Cold start to first paint (ms) | Warm start to first paint (ms) | Install on disk (MiB) |
+| --- | --- | --- | --- | --- |
+| Arrow 0.5.0 | 337.8 | 6682 | 4491 | 252.1 |
+| VS Code 1.143.0 | 1789.2 | 12423 | 6970 | 983.3 |
+| Cursor 3.26.16 | 2335.2 | 15240 | 10812 | 1035.1 |
+<!-- perf-table:end -->
+
+The table is a measurement, not a feature comparison. `scripts/perf-compare.mjs` measured all three
+editors on one machine on 22 October 2026, and the raw numbers sit in
+[`docs/perf/results.json`](docs/perf/results.json). The machine is an Intel Core i3-4005U with four
+threads and 7.6 GiB of RAM, running Omarchy on kernel 7.2.8, with every window on a private Xvfb
+display at 1280x800.
+
+Each editor ran from the vendor's unpacked Linux artifact on that display, started in its own
+profile directory. A cold start is the first launch against an empty profile, and a warm start is
+the second launch against the same one. The page cache was not flushed, because that needs root.
+A start ends at the first capture of the window that proved paint. Idle memory is the median of
+three samples of the resident set of the whole process tree, taken 25 seconds after the window
+painted. Install size is the apparent size of the unpacked tree the editor runs from. The full
+method, the artifacts and their URLs are in [`docs/perf/method.md`](docs/perf/method.md).
+
+No folder is open in any editor, because the Arrow shell does not read a folder from its command
+line. Every editor therefore ran with an empty window, under the same method, and these are the
+smallest idle numbers each can show. Arrow has no extensions, no language server, no multi-cursor
+and no remote development, and the numbers say nothing about which editor is better. The AI
+features are outside the measurement, deliberately: Arrow keeps the provider key in the OS
+keychain and never in the webview, so no run here touched a provider.
+
 ## Requirements
 
 - Node.js 22 or newer. `package.json` asks for 22 or newer, and the workflow of CI installs 22.
