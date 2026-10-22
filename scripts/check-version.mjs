@@ -1,14 +1,21 @@
 /**
- * The four files that carry the version of the application, and the check that
- * they name the same version.
+ * The files that carry the version of the application, and the check that they
+ * name the same version.
  *
- * A release is only sane when the tag, the package manifest, the Rust manifest
- * and the Tauri configuration agree. The version lives in four files:
+ * A release is only sane when the tag, the package manifest, the Rust manifest,
+ * the Tauri configuration and the lock file of the crate agree. The version
+ * lives in five places:
  *
  *   package.json
  *   apps/desktop/package.json
  *   apps/desktop/src-tauri/Cargo.toml
  *   apps/desktop/src-tauri/tauri.conf.json
+ *   apps/desktop/src-tauri/Cargo.lock (the entry of the local package)
+ *
+ * The lock names the local package by the name in the `[package]` table of the
+ * manifest, so the two cannot drift apart without this check failing. A lock
+ * that is absent is a failure as well: the crate ships its lock, and a check
+ * that skipped a missing file would pass on the tree that lost it.
  *
  * `ARROW_VERSION_ROOT` names the directory the check reads, and it defaults to
  * the working directory. A proof case points it at a temporary tree that holds
@@ -22,6 +29,8 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 
 const root = path.resolve(process.env.ARROW_VERSION_ROOT ?? process.cwd());
+const cargoManifest = "apps/desktop/src-tauri/Cargo.toml";
+const cargoLock = "apps/desktop/src-tauri/Cargo.lock";
 
 /** The version a file must hold, or the reason it holds none. */
 function jsonVersion(relative) {
@@ -38,20 +47,44 @@ function jsonVersion(relative) {
   };
 }
 
+/** The `[package]` table of a Cargo manifest. */
+function cargoPackageTable(relative) {
+  const source = readFileSync(path.join(root, relative), "utf8");
+  return source.match(/^\[package\][\s\S]*?(?=^\[|(?![\s\S]))/m)?.[0] ?? "";
+}
+
 /** The `version` of the `[package]` table of a Cargo manifest. */
 function cargoVersion(relative) {
-  const source = readFileSync(path.join(root, relative), "utf8");
-  const packageTable = source.match(/^\[package\][\s\S]*?(?=^\[|(?![\s\S]))/m);
-  const line = packageTable?.[0].match(/^version\s*=\s*"([^"]+)"/m);
+  const line = cargoPackageTable(relative).match(/^version\s*=\s*"([^"]+)"/m);
   if (!line) return { version: undefined, problem: "holds no version in its [package] table" };
   return { version: line[1], problem: null };
+}
+
+/** The `version` of the local package in the lock file of the crate. */
+function cargoLockVersion(relative) {
+  const name = cargoPackageTable(cargoManifest).match(/^name\s*=\s*"([^"]+)"/m)?.[1];
+  if (!name)
+    return { version: undefined, problem: "cannot be checked, the manifest names no package" };
+
+  const source = readFileSync(path.join(root, relative), "utf8");
+
+  for (const block of source.split(/^\[\[package\]\]\r?\n/m)) {
+    const blockName = block.match(/^name\s*=\s*"([^"]+)"/m)?.[1];
+    if (blockName !== name) continue;
+    const line = block.match(/^version\s*=\s*"([^"]+)"/m);
+    if (!line) return { version: undefined, problem: `holds no version for ${name}` };
+    return { version: line[1], problem: null };
+  }
+
+  return { version: undefined, problem: `holds no package named ${name}` };
 }
 
 const carriers = [
   { file: "package.json", read: jsonVersion },
   { file: "apps/desktop/package.json", read: jsonVersion },
-  { file: "apps/desktop/src-tauri/Cargo.toml", read: cargoVersion },
+  { file: cargoManifest, read: cargoVersion },
   { file: "apps/desktop/src-tauri/tauri.conf.json", read: jsonVersion },
+  { file: cargoLock, read: cargoLockVersion },
 ];
 
 const versionPattern = /^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/;
@@ -75,18 +108,19 @@ for (const carrier of carriers) {
   }
 }
 
-if (problems.length > 0) {
-  console.error("version-agreement: the version files cannot be read");
-  for (const problem of problems) console.error(`  ${problem}`);
-  process.exit(1);
-}
-
 const versions = new Set(readings.map((reading) => reading.version));
+const disagree = readings.length > 1 && versions.size !== 1;
 
-if (versions.size !== 1) {
-  console.error("version-agreement: the version files disagree");
-  for (const reading of readings) console.error(`  ${reading.file} says ${reading.version}`);
-  console.error(`  ARROW_VERSION_ROOT=${root}`);
+if (problems.length > 0 || disagree) {
+  if (problems.length > 0) {
+    console.error("version-agreement: the version files cannot be read");
+    for (const problem of problems) console.error(`  ${problem}`);
+  }
+  if (disagree) {
+    console.error("version-agreement: the version files disagree");
+    for (const reading of readings) console.error(`  ${reading.file} says ${reading.version}`);
+    console.error(`  ARROW_VERSION_ROOT=${root}`);
+  }
   process.exit(1);
 }
 
