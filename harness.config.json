@@ -3,8 +3,8 @@
   "commands": {
     "exec": "pnpm exec"
   },
-  "minimumCriteria": 13,
-  "minimumProofs": 72,
+  "minimumCriteria": 14,
+  "minimumProofs": 74,
   "agents": {
     "file": "AGENTS.md",
     "entryPoint": "CLAUDE.md",
@@ -144,6 +144,40 @@
             "key": "run",
             "contains": ["apt-get install", "libayatana-appindicator3-dev"],
             "notContains": ["libappindicator3-dev"]
+          }
+        ]
+      },
+      {
+        "match": "The built application opens a real window that paints",
+        "path": ".github/workflows/real-window.yml",
+        "kind": "yamlStructure",
+        "require": [
+          {
+            "path": "on.schedule.0.cron",
+            "contains": [" * * *"]
+          },
+          {
+            "path": "on.workflow_dispatch.inputs.reason.default",
+            "contains": ["manual"]
+          },
+          {
+            "path": "on.push.branches.0",
+            "contains": ["main"]
+          },
+          {
+            "path": "jobs.real-window.steps",
+            "key": "run",
+            "contains": ["scripts/real-window.sh", "--screenshot"]
+          },
+          {
+            "path": "jobs.real-window.steps",
+            "key": "run",
+            "contains": ["apt-get install", "xvfb"]
+          },
+          {
+            "path": "jobs.real-window.steps",
+            "key": "uses",
+            "contains": ["actions/upload-artifact@v4"]
           }
         ]
       },
@@ -298,6 +332,43 @@
             "key": "run",
             "contains": ["apt-get install", "libayatana-appindicator3-dev"],
             "notContains": ["libappindicator3-dev"]
+          }
+        ]
+      }
+    },
+    {
+      "id": "real-window",
+      "why": "the built application opens a real window that paints, and the workflow that proves it keeps its run, its display and its screenshot",
+      "check": {
+        "type": "yamlStructure",
+        "path": ".github/workflows/real-window.yml",
+        "require": [
+          {
+            "path": "on.schedule.0.cron",
+            "contains": [" * * *"]
+          },
+          {
+            "path": "on.workflow_dispatch.inputs.reason.default",
+            "contains": ["manual"]
+          },
+          {
+            "path": "on.push.branches.0",
+            "contains": ["main"]
+          },
+          {
+            "path": "jobs.real-window.steps",
+            "key": "run",
+            "contains": ["scripts/real-window.sh", "--screenshot"]
+          },
+          {
+            "path": "jobs.real-window.steps",
+            "key": "run",
+            "contains": ["apt-get install", "xvfb"]
+          },
+          {
+            "path": "jobs.real-window.steps",
+            "key": "uses",
+            "contains": ["actions/upload-artifact@v4"]
           }
         ]
       }
@@ -1381,6 +1452,34 @@
         "run": "${PM_EXEC} playwright test apps/desktop/e2e/inline-edit.spec.ts -g \"a failed request tells the reader why\"",
         "exit": "nonzero",
         "contains": "the reader learns why the request failed"
+      }
+    },
+    {
+      "name": "the real window criterion fails when the workflow stops running the script",
+      "write": [
+        {
+          "path": ".github/workflows/real-window.yml",
+          "content": "name: Real window\n\non:\n  schedule:\n    - cron: \"23 5 * * *\"\n  workflow_dispatch:\n    inputs:\n      reason:\n        description: Why this run was started\n        required: false\n        default: manual\n  push:\n    branches: [main]\n\njobs:\n  real-window:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n\n      - name: Install Xvfb and the Tauri system dependencies\n        run: |\n          sudo apt-get update\n          sudo apt-get install -y xvfb imagemagick\n\n      - name: Open the real window and prove it painted\n        run: \"echo scripts/real-window.sh --screenshot docs/images/real-window.png\"\n\n      - name: Upload the screenshot\n        uses: actions/upload-artifact@v4\n        with:\n          name: real-window\n          path: docs/images/real-window.png\n"
+        }
+      ],
+      "expect": {
+        "run": "node scripts/harness-score.mjs --only real-window",
+        "exit": "nonzero",
+        "contains": "runs scripts/real-window.sh"
+      }
+    },
+    {
+      "name": "the real window criterion fails when the workflow drops the artifact upload",
+      "write": [
+        {
+          "path": ".github/workflows/real-window.yml",
+          "content": "name: Real window\n\non:\n  schedule:\n    - cron: \"23 5 * * *\"\n  workflow_dispatch:\n    inputs:\n      reason:\n        description: Why this run was started\n        required: false\n        default: manual\n  push:\n    branches: [main]\n\njobs:\n  real-window:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n\n      - name: Install Xvfb and the Tauri system dependencies\n        run: |\n          sudo apt-get update\n          sudo apt-get install -y xvfb imagemagick\n\n      - name: Open the real window and prove it painted\n        run: \"scripts/real-window.sh --screenshot docs/images/real-window.png\"\n"
+        }
+      ],
+      "expect": {
+        "run": "node scripts/harness-score.mjs --only real-window",
+        "exit": "nonzero",
+        "contains": "actions/upload-artifact"
       }
     }
   ],
